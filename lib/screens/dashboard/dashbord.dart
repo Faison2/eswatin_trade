@@ -1,8 +1,14 @@
+import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../market_watch/market_watch.dart';
+import '../market_watch/market_watch_screengraph.dart';
+import '../profile/profile.dart';
+import '../trade/trade.dart';
 import '../transactions/recent_transactions.dart';
+
+
 // ─── ESE Color Palette ────────────────────────────────────────────────────────
 class _C {
   static const bg        = Color(0xFF060C1A);
@@ -86,6 +92,22 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.dispose();
   }
 
+  void _onNavTap(int i) {
+    if (i == 4) {
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, animation, __) => const ProfileScreen(),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 280),
+        ),
+      );
+      return;
+    }
+    setState(() => _navIndex = i);
+  }
+
   @override
   Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -117,13 +139,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                 Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 110),
+                    padding: const EdgeInsets.only(bottom: 130),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 16),
 
-                        // Portfolio hero card
                         FadeTransition(
                           opacity: _cardFade,
                           child: SlideTransition(
@@ -134,7 +155,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                         const SizedBox(height: 14),
 
-                        // Buy / Sell
                         FadeTransition(
                           opacity: _cardFade,
                           child: const _QuickActions(),
@@ -142,7 +162,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                         const SizedBox(height: 20),
 
-                        // Stats cards
                         FadeTransition(
                           opacity: _contentFade,
                           child: const _StatsRow(),
@@ -150,7 +169,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                         const SizedBox(height: 22),
 
-                        // Recent Orders ← separate file
                         FadeTransition(
                           opacity: _contentFade,
                           child: const RecentOrders(),
@@ -158,7 +176,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                         const SizedBox(height: 22),
 
-                        // Market Watch ← separate file
                         FadeTransition(
                           opacity: _contentFade,
                           child: const MarketWatch(),
@@ -176,9 +193,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
       bottomNavigationBar: _BottomNav(
         currentIndex: _navIndex,
-        onTap: (i) => setState(() => _navIndex = i),
+        onTap: _onNavTap,
       ),
-      floatingActionButton: _FAB(),
+      floatingActionButton: const _FAB(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
@@ -267,15 +284,11 @@ class _TopBar extends StatelessWidget {
               ],
             ),
           ),
-
         ],
       ),
     );
   }
 }
-
-// ─── Ticker Strip ─────────────────────────────────────────────────────────────
-
 
 // ─── Portfolio Hero Card ──────────────────────────────────────────────────────
 class _PortfolioHeroCard extends StatelessWidget {
@@ -432,69 +445,159 @@ class _QuickActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: _ActionButton(
-              label: 'Buy', icon: Icons.trending_up_rounded,
-              gradient: const LinearGradient(
-                  colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)]),
-              borderColor: _C.teal.withOpacity(0.45),
-              textColor: _C.teal, onTap: () {},
+      child: _TradeButton(
+        onTap: () => Navigator.push(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (_, a, __) => const TradeScreen(),
+            transitionsBuilder: (_, a, __, child) => SlideTransition(
+              position: Tween(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(parent: a,
+                  curve: Curves.easeOutCubic)),
+              child: child,
             ),
+            transitionDuration: const Duration(milliseconds: 380),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _ActionButton(
-              label: 'Sell', icon: Icons.trending_down_rounded,
-              gradient: const LinearGradient(
-                  colors: [Color(0xFF7F0000), Color(0xFFC62828)]),
-              borderColor: _C.red.withOpacity(0.45),
-              textColor: _C.red, onTap: () {},
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Gradient gradient;
-  final Color borderColor, textColor;
+class _TradeButton extends StatefulWidget {
   final VoidCallback onTap;
-  const _ActionButton({
-    required this.label, required this.icon, required this.gradient,
-    required this.borderColor, required this.textColor, required this.onTap,
-  });
+  const _TradeButton({required this.onTap});
+
+  @override
+  State<_TradeButton> createState() => _TradeButtonState();
+}
+
+class _TradeButtonState extends State<_TradeButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this,
+        duration: const Duration(milliseconds: 100));
+    _scale = Tween(begin: 1.0, end: 0.96)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 50,
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor, width: 1.2),
-          boxShadow: [
-            BoxShadow(color: textColor.withOpacity(0.18),
-                blurRadius: 16, offset: const Offset(0, 4)),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: textColor, size: 18),
-            const SizedBox(width: 8),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w800,
-                    color: textColor, letterSpacing: 0.5)),
-          ],
+    return ScaleTransition(
+      scale: _scale,
+      child: GestureDetector(
+        onTapDown: (_) => _ctrl.forward(),
+        onTapUp: (_) { _ctrl.reverse(); widget.onTap(); },
+        onTapCancel: () => _ctrl.reverse(),
+        child: Container(
+          height: 58,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0E2A14), Color(0xFF1A3D1E), Color(0xFF0E2A14)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+                color: _C.gold.withOpacity(0.30), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: _C.gold.withOpacity(0.12),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.30),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Subtle shimmer line
+              Positioned(
+                left: 40, right: 40, top: 0,
+                child: Container(
+                  height: 1,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [
+                      Colors.transparent,
+                      _C.gold.withOpacity(0.20),
+                      Colors.transparent,
+                    ]),
+                  ),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _C.gold.withOpacity(0.12),
+                      border: Border.all(
+                          color: _C.gold.withOpacity(0.30), width: 1),
+                    ),
+                    child: const Icon(Icons.candlestick_chart_rounded,
+                        color: _C.gold, size: 16),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text('Trade',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: _C.gold,
+                          letterSpacing: 0.8)),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _C.teal.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: _C.teal.withOpacity(0.25), width: 1),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.arrow_upward_rounded,
+                            color: _C.teal, size: 9),
+                        const SizedBox(width: 2),
+                        const Text('Buy',
+                            style: TextStyle(
+                                fontSize: 9, fontWeight: FontWeight.w700,
+                                color: _C.teal)),
+                        const SizedBox(width: 6),
+                        Container(width: 1, height: 10, color: _C.border),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.arrow_downward_rounded,
+                            color: _C.red, size: 9),
+                        const SizedBox(width: 2),
+                        const Text('Sell',
+                            style: TextStyle(
+                                fontSize: 9, fontWeight: FontWeight.w700,
+                                color: _C.red)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -508,7 +611,7 @@ class _StatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 120,  // ← tall enough to never overflow
+      height: 120,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -569,7 +672,6 @@ class _StatCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Icon + dot
           Row(
             children: [
               Container(
@@ -590,7 +692,6 @@ class _StatCard extends StatelessWidget {
               ),
             ],
           ),
-          // Value block
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -618,7 +719,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ─── Bottom Navigation ────────────────────────────────────────────────────────
+// ─── Bottom Navigation (Floating Pill / Glassmorphic) ─────────────────────────
 class _BottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -626,27 +727,81 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BottomAppBar(
-      color: const Color(0xFF080F1E),
-      elevation: 0,
-      notchMargin: 8,
-      shape: const CircularNotchedRectangle(),
-      child: Container(
-        height: 62,
-        decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: _C.border, width: 1))),
-        child: Row(
-          children: [
-            _NavItem(icon: Icons.pie_chart_rounded, label: 'Portfolio',
-                index: 0, current: currentIndex, onTap: onTap),
-            _NavItem(icon: Icons.bar_chart_rounded, label: 'Markets',
-                index: 1, current: currentIndex, onTap: onTap),
-            const Expanded(child: SizedBox()),
-            _NavItem(icon: Icons.star_outline_rounded, label: 'Watchlist',
-                index: 3, current: currentIndex, onTap: onTap),
-            _NavItem(icon: Icons.person_outline_rounded, label: 'Profile',
-                index: 4, current: currentIndex, onTap: onTap),
-          ],
+    return Container(
+      color: Colors.transparent,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          bottom: MediaQuery.of(context).padding.bottom + 14,
+          top: 8,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(36),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+            child: Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFF0D1728).withOpacity(0.75),
+                borderRadius: BorderRadius.circular(36),
+                border: Border.all(
+                  color: _C.gold.withOpacity(0.14),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.45),
+                    blurRadius: 32,
+                    offset: const Offset(0, 10),
+                  ),
+                  BoxShadow(
+                    color: _C.gold.withOpacity(0.06),
+                    blurRadius: 20,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  _NavItem(
+                    icon: Icons.pie_chart_outline_rounded,
+                    activeIcon: Icons.pie_chart_rounded,
+                    label: 'Portfolio',
+                    index: 0,
+                    current: currentIndex,
+                    onTap: onTap,
+                  ),
+                  _NavItem(
+                    icon: Icons.bar_chart_outlined,
+                    activeIcon: Icons.bar_chart_rounded,
+                    label: 'Deposit',
+                    index: 1,
+                    current: currentIndex,
+                    onTap: onTap,
+                  ),
+                  // Centre space for FAB
+                  const Expanded(child: SizedBox()),
+                  _NavItem(
+                    icon: Icons.money_rounded,
+                    activeIcon: Icons.money_rounded,
+                    label: 'Withdrawal',
+                    index: 3,
+                    current: currentIndex,
+                    onTap: onTap,
+                  ),
+                  _NavItem(
+                    icon: Icons.person_outline_rounded,
+                    activeIcon: Icons.person_rounded,
+                    label: 'Profile',
+                    index: 4,
+                    current: currentIndex,
+                    onTap: onTap,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -655,12 +810,18 @@ class _BottomNav extends StatelessWidget {
 
 class _NavItem extends StatelessWidget {
   final IconData icon;
+  final IconData activeIcon;
   final String label;
   final int index, current;
   final ValueChanged<int> onTap;
+
   const _NavItem({
-    required this.icon, required this.label,
-    required this.index, required this.current, required this.onTap,
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.index,
+    required this.current,
+    required this.onTap,
   });
 
   @override
@@ -673,25 +834,46 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 36, height: 28,
-              decoration: BoxDecoration(
-                color: selected
-                    ? _C.gold.withOpacity(0.12) : Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, anim) => ScaleTransition(
+                scale: anim,
+                child: FadeTransition(opacity: anim, child: child),
               ),
-              child: Icon(icon, size: 20,
-                  color: selected ? _C.gold : _C.textMuted),
+              child: selected
+                  ? Container(
+                key: const ValueKey('on'),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _C.gold.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _C.gold.withOpacity(0.28),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(activeIcon, size: 17, color: _C.gold),
+              )
+                  : Padding(
+                key: const ValueKey('off'),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 5),
+                child: Icon(icon, size: 19, color: _C.textMuted),
+              ),
             ),
-            const SizedBox(height: 2),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 9,
-                    fontWeight:
-                    selected ? FontWeight.w700 : FontWeight.w400,
-                    color: selected ? _C.gold : _C.textMuted,
-                    letterSpacing: 0.3)),
+            const SizedBox(height: 3),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight:
+                selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected ? _C.gold : _C.textMuted,
+                letterSpacing: 0.3,
+              ),
+              child: Text(label),
+            ),
           ],
         ),
       ),
@@ -701,6 +883,8 @@ class _NavItem extends StatelessWidget {
 
 // ─── Floating Action Button ───────────────────────────────────────────────────
 class _FAB extends StatefulWidget {
+  const _FAB();
+
   @override
   State<_FAB> createState() => _FABState();
 }
@@ -714,39 +898,65 @@ class _FABState extends State<_FAB> with SingleTickerProviderStateMixin {
     super.initState();
     _ctrl = AnimationController(vsync: this,
         duration: const Duration(milliseconds: 100));
-    _scale = Tween(begin: 1.0, end: 0.92).animate(
+    _scale = Tween(begin: 1.0, end: 0.90).animate(
         CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scale,
-      child: GestureDetector(
-        onTapDown: (_) => _ctrl.forward(),
-        onTapUp: (_) => _ctrl.reverse(),
-        onTapCancel: () => _ctrl.reverse(),
-        child: Container(
-          width: 60, height: 60,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-                colors: [Color(0xFF0A1628), Color(0xFF152240)],
-                begin: Alignment.topLeft, end: Alignment.bottomRight),
-            border: Border.all(
-                color: _C.gold.withOpacity(0.45), width: 1.5),
-            boxShadow: [
-              BoxShadow(color: _C.gold.withOpacity(0.30),
-                  blurRadius: 20, offset: const Offset(0, 6),
-                  spreadRadius: -2),
-              BoxShadow(color: Colors.black.withOpacity(0.45),
-                  blurRadius: 12, offset: const Offset(0, 4)),
-            ],
+    // Lift the FAB above the pill nav bar
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomPad + 46),
+      child: ScaleTransition(
+        scale: _scale,
+        child: GestureDetector(
+          onTapDown: (_) => _ctrl.forward(),
+          onTapUp: (_) {
+            _ctrl.reverse();
+            Navigator.push(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (_, a, __) => const MarketWatchScreen(),
+                transitionsBuilder: (_, a, __, child) =>
+                    FadeTransition(opacity: a, child: child),
+                transitionDuration: const Duration(milliseconds: 300),
+              ),
+            );
+          },
+          onTapCancel: () => _ctrl.reverse(),
+          child: Container(
+            width: 58, height: 58,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFFD4A030), Color(0xFFB8860B)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _C.gold.withOpacity(0.50),
+                  blurRadius: 22,
+                  offset: const Offset(0, 6),
+                  spreadRadius: -2,
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.40),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.candlestick_chart_rounded,
+                color: Color(0xFF060C1A), size: 24),
           ),
-          child: const Icon(Icons.add_rounded, color: _C.gold, size: 28),
         ),
       ),
     );

@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import '../../../main.dart';
+import '../../dashboard/dashbord.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -107,8 +107,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     await Future.delayed(const Duration(milliseconds: 1800));
-    if (mounted) setState(() => _isLoading = false);
-    // TODO: Navigate to dashboard
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => const DashboardScreen(),
+        transitionsBuilder: (_, anim, __, child) =>
+            FadeTransition(opacity: anim, child: child),
+        transitionDuration: const Duration(milliseconds: 500),
+      ),
+    );
   }
 
   @override
@@ -252,9 +261,9 @@ class _LogoHero extends StatelessWidget {
                     borderRadius: BorderRadius.circular(28),
                     child: Image.asset(
                       'assets/images/logo.png',
-                      width: 150,
-                      height: 150,
-                    //  fit: BoxFit.cover,
+                      width: 118,
+                      height: 118,
+                   //   fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => _FallbackLogo(),
                     ),
                   ),
@@ -512,8 +521,8 @@ class _LoginCard extends StatelessWidget {
       decoration: const BoxDecoration(
         color: Color(0xFFF6F3EC),
         borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+          topLeft: Radius.circular(14),
+          topRight: Radius.circular(14),
         ),
       ),
       child: Stack(

@@ -646,10 +646,10 @@ class _StockCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: stock.positive
-                          ? [const Color(0xFF1B5E20),
-                        const Color(0xFF2E7D32)]
-                          : [const Color(0xFF7F0000),
-                        const Color(0xFFC62828)],
+                          ? [const Color(0xFF15E20),
+                        const Color(0xFF2E7D2)]
+                          : [const Color(0xF7F0000),
+                        const Color(0xFFC6828)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),

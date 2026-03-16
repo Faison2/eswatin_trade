@@ -7,6 +7,7 @@ import '../market_watch/market_watch_screengraph.dart';
 import '../profile/profile.dart';
 import '../trade/trade.dart';
 import '../transactions/recent_transactions.dart';
+import 'drawer.dart';
 
 
 // ─── ESE Color Palette ────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   int _navIndex = 0;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   late AnimationController _entranceCtrl;
   late AnimationController _pulseCtrl;
@@ -116,8 +118,10 @@ class _DashboardScreenState extends State<DashboardScreen>
     ));
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: _C.bg,
       extendBody: true,
+      drawer: const AppDrawer(),
       body: Stack(
         children: [
           Positioned(top: -60, right: -40,
@@ -133,7 +137,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   opacity: _headerFade,
                   child: SlideTransition(
                     position: _headerSlide,
-                    child: _TopBar(shimmer: _shimmer),
+                    child: _TopBar(
+                      shimmer: _shimmer,
+                      onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+                    ),
                   ),
                 ),
                 Expanded(
@@ -169,12 +176,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                         const SizedBox(height: 22),
 
-                        FadeTransition(
-                          opacity: _contentFade,
-                          child: const RecentOrders(),
-                        ),
-
-                        const SizedBox(height: 22),
+                        // ── RecentOrders removed ──
 
                         FadeTransition(
                           opacity: _contentFade,
@@ -204,7 +206,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 // ─── Top Bar ──────────────────────────────────────────────────────────────────
 class _TopBar extends StatelessWidget {
   final Animation<double> shimmer;
-  const _TopBar({required this.shimmer});
+  final VoidCallback onMenuTap;
+  const _TopBar({required this.shimmer, required this.onMenuTap});
 
   @override
   Widget build(BuildContext context) {
@@ -212,20 +215,25 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
         children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                  colors: [Color(0xFF1565C0), Color(0xFF0D47A1)]),
-              border: Border.all(
-                  color: _C.gold.withOpacity(0.35), width: 1.5),
-            ),
-            child: const Center(
-              child: Text('JD',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w800,
-                      color: Colors.white, letterSpacing: 0.5)),
+          // ── Drawer Menu Button ──
+          GestureDetector(
+            onTap: onMenuTap,
+            child: Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                    colors: [Color(0xFF1565C0), Color(0xFF0D47A1)]),
+                border: Border.all(
+                    color: _C.gold.withOpacity(0.35), width: 1.5),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.menu_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -526,7 +534,6 @@ class _TradeButtonState extends State<_TradeButton>
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Subtle shimmer line
               Positioned(
                 left: 40, right: 40, top: 0,
                 child: Container(
@@ -910,7 +917,6 @@ class _FABState extends State<_FAB> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // Lift the FAB above the pill nav bar
     final bottomPad = MediaQuery.of(context).padding.bottom;
     return Padding(
       padding: EdgeInsets.only(bottom: bottomPad + 46),

@@ -2,13 +2,13 @@ import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../market_watch/market_watch.dart';
 import '../market_watch/market_watch_screengraph.dart';
 import '../profile/profile.dart';
 import '../trade/trade.dart';
 import '../transactions/recent_transactions.dart';
 import 'drawer.dart';
-
 
 // ─── ESE Color Palette ────────────────────────────────────────────────────────
 class _C {
@@ -39,6 +39,11 @@ class _DashboardScreenState extends State<DashboardScreen>
     with TickerProviderStateMixin {
   int _navIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  // ── SharedPreferences profile data ───────────────────────────────────────
+  String _forenames  = '';
+  String _cdsNumber  = '';
+  String _initials   = '';
 
   late AnimationController _entranceCtrl;
   late AnimationController _pulseCtrl;
@@ -82,6 +87,21 @@ class _DashboardScreenState extends State<DashboardScreen>
     _shimmer     = Tween(begin: -1.5, end: 2.5).animate(
         CurvedAnimation(parent: _shimmerCtrl, curve: Curves.easeInOut));
 
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final p = await SharedPreferences.getInstance();
+    final forenames = p.getString('forenames') ?? '';
+    final surname   = p.getString('surname')   ?? '';
+    setState(() {
+      _forenames = forenames;
+      _cdsNumber = p.getString('cds_number') ?? '—';
+      _initials  = '${forenames.isNotEmpty ? forenames[0] : ''}'
+          '${surname.isNotEmpty   ? surname[0]   : ''}'
+          .toUpperCase();
+      if (_initials.isEmpty) _initials = 'U';
+    });
     _entranceCtrl.forward();
   }
 
@@ -121,7 +141,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       key: _scaffoldKey,
       backgroundColor: _C.bg,
       extendBody: true,
-      drawer: const AppDrawer(),
+      drawer: AppDrawer(
+        initials:  _initials,
+        cdsNumber: _cdsNumber,
+      ),
       body: Stack(
         children: [
           Positioned(top: -60, right: -40,
@@ -138,8 +161,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                   child: SlideTransition(
                     position: _headerSlide,
                     child: _TopBar(
-                      shimmer: _shimmer,
-                      onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
+                      shimmer:    _shimmer,
+                      forenames:  _forenames,
+                      initials:   _initials,
+                      cdsNumber:  _cdsNumber,
+                      onMenuTap:  () => _scaffoldKey.currentState?.openDrawer(),
                     ),
                   ),
                 ),
@@ -176,8 +202,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                         const SizedBox(height: 22),
 
-                        // ── RecentOrders removed ──
-
                         FadeTransition(
                           opacity: _contentFade,
                           child: const MarketWatch(),
@@ -206,69 +230,131 @@ class _DashboardScreenState extends State<DashboardScreen>
 // ─── Top Bar ──────────────────────────────────────────────────────────────────
 class _TopBar extends StatelessWidget {
   final Animation<double> shimmer;
+  final String  forenames;
+  final String  initials;
+  final String  cdsNumber;
   final VoidCallback onMenuTap;
-  const _TopBar({required this.shimmer, required this.onMenuTap});
+
+  const _TopBar({
+    required this.shimmer,
+    required this.forenames,
+    required this.initials,
+    required this.cdsNumber,
+    required this.onMenuTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Greeting based on time of day
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12 ? 'Good morning'
+        : hour < 17 ? 'Good afternoon'
+        : 'Good evening';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
         children: [
-          // ── Drawer Menu Button ──
+          // ── Avatar / Menu button ───────────────────────────────────────
           GestureDetector(
             onTap: onMenuTap,
             child: Container(
-              width: 40, height: 40,
+              width: 42, height: 42,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: const LinearGradient(
-                    colors: [Color(0xFF1565C0), Color(0xFF0D47A1)]),
+                    colors: [Color(0xFFD4A030), Color(0xFF8B5E10)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight),
                 border: Border.all(
-                    color: _C.gold.withOpacity(0.35), width: 1.5),
+                    color: _C.gold.withOpacity(0.45), width: 1.5),
+                boxShadow: [
+                  BoxShadow(color: _C.gold.withOpacity(0.28),
+                      blurRadius: 14, offset: const Offset(0, 3)),
+                ],
               ),
-              child: const Center(
-                child: Icon(
-                  Icons.menu_rounded,
-                  color: Colors.white,
-                  size: 18,
+              child: Padding(
+                padding: const EdgeInsets.all(1.5),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF0D1A33), Color(0xFF142444)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      initials,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: _C.goldLight,
+                          letterSpacing: 1),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
+
           const SizedBox(width: 10),
+
+          // ── Greeting + CDS ─────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Text('Good morning, John',
-                        style: TextStyle(
-                            fontSize: 13.5, fontWeight: FontWeight.w700,
-                            color: _C.textPrim)),
+                    Text(
+                      '$greeting, ${forenames.isNotEmpty ? forenames.split(' ').first : 'Investor'}',
+                      style: const TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w700,
+                          color: _C.textPrim),
+                    ),
                     const SizedBox(width: 4),
                     const Text('👋', style: TextStyle(fontSize: 12)),
                   ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
+                // ── CDS Number pill ──────────────────────────────────────
                 Row(
                   children: [
                     Container(
-                      width: 6, height: 6,
-                      decoration: const BoxDecoration(
-                          shape: BoxShape.circle, color: _C.teal),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _C.gold.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: _C.gold.withOpacity(0.22), width: 1),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.credit_card_rounded,
+                              color: _C.gold.withOpacity(0.75), size: 9),
+                          const SizedBox(width: 4),
+                          Text(
+                            cdsNumber,
+                            style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: _C.gold.withOpacity(0.90),
+                                letterSpacing: 0.4),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 5),
-                    Text('ESE Market Open · Wed 4 Mar 2026',
-                        style: TextStyle(
-                            fontSize: 10, color: _C.textSub,
-                            letterSpacing: 0.2)),
                   ],
                 ),
               ],
             ),
           ),
+
+          // ── Notification bell ──────────────────────────────────────────
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
@@ -516,19 +602,12 @@ class _TradeButtonState extends State<_TradeButton>
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-                color: _C.gold.withOpacity(0.30), width: 1.2),
+            border: Border.all(color: _C.gold.withOpacity(0.30), width: 1.2),
             boxShadow: [
-              BoxShadow(
-                color: _C.gold.withOpacity(0.12),
-                blurRadius: 20,
-                offset: const Offset(0, 6),
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.30),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
-              ),
+              BoxShadow(color: _C.gold.withOpacity(0.12),
+                  blurRadius: 20, offset: const Offset(0, 6)),
+              BoxShadow(color: Colors.black.withOpacity(0.30),
+                  blurRadius: 12, offset: const Offset(0, 3)),
             ],
           ),
           child: Stack(
@@ -563,11 +642,8 @@ class _TradeButtonState extends State<_TradeButton>
                   ),
                   const SizedBox(width: 12),
                   const Text('Trade',
-                      style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: _C.gold,
-                          letterSpacing: 0.8)),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900,
+                          color: _C.gold, letterSpacing: 0.8)),
                   const SizedBox(width: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(
@@ -580,24 +656,20 @@ class _TradeButtonState extends State<_TradeButton>
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.arrow_upward_rounded,
+                      children: const [
+                        Icon(Icons.arrow_upward_rounded,
                             color: _C.teal, size: 9),
-                        const SizedBox(width: 2),
-                        const Text('Buy',
-                            style: TextStyle(
-                                fontSize: 9, fontWeight: FontWeight.w700,
-                                color: _C.teal)),
-                        const SizedBox(width: 6),
-                        Container(width: 1, height: 10, color: _C.border),
-                        const SizedBox(width: 6),
-                        const Icon(Icons.arrow_downward_rounded,
+                        SizedBox(width: 2),
+                        Text('Buy', style: TextStyle(fontSize: 9,
+                            fontWeight: FontWeight.w700, color: _C.teal)),
+                        SizedBox(width: 6),
+                        SizedBox(width: 1, height: 10),
+                        SizedBox(width: 6),
+                        Icon(Icons.arrow_downward_rounded,
                             color: _C.red, size: 9),
-                        const SizedBox(width: 2),
-                        const Text('Sell',
-                            style: TextStyle(
-                                fontSize: 9, fontWeight: FontWeight.w700,
-                                color: _C.red)),
+                        SizedBox(width: 2),
+                        Text('Sell', style: TextStyle(fontSize: 9,
+                            fontWeight: FontWeight.w700, color: _C.red)),
                       ],
                     ),
                   ),
@@ -693,9 +765,8 @@ class _StatCard extends StatelessWidget {
               Container(
                 width: 5, height: 5,
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: accentColor.withOpacity(0.5),
-                ),
+                    shape: BoxShape.circle,
+                    color: accentColor.withOpacity(0.5)),
               ),
             ],
           ),
@@ -708,8 +779,7 @@ class _StatCard extends StatelessWidget {
                       color: _C.textPrim, letterSpacing: -0.5, height: 1.1)),
               const SizedBox(height: 3),
               Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontSize: 9, color: _C.textSub, letterSpacing: 0.4)),
               const SizedBox(height: 3),
@@ -726,7 +796,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ─── Bottom Navigation (Floating Pill / Glassmorphic) ─────────────────────────
+// ─── Bottom Navigation ────────────────────────────────────────────────────────
 class _BottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -738,8 +808,7 @@ class _BottomNav extends StatelessWidget {
       color: Colors.transparent,
       child: Padding(
         padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
+          left: 20, right: 20,
           bottom: MediaQuery.of(context).padding.bottom + 14,
           top: 8,
         ),
@@ -752,59 +821,33 @@ class _BottomNav extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFF0D1728).withOpacity(0.75),
                 borderRadius: BorderRadius.circular(36),
-                border: Border.all(
-                  color: _C.gold.withOpacity(0.14),
-                  width: 1,
-                ),
+                border: Border.all(color: _C.gold.withOpacity(0.14), width: 1),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.45),
-                    blurRadius: 32,
-                    offset: const Offset(0, 10),
-                  ),
-                  BoxShadow(
-                    color: _C.gold.withOpacity(0.06),
-                    blurRadius: 20,
-                    offset: const Offset(0, -2),
-                  ),
+                  BoxShadow(color: Colors.black.withOpacity(0.45),
+                      blurRadius: 32, offset: const Offset(0, 10)),
+                  BoxShadow(color: _C.gold.withOpacity(0.06),
+                      blurRadius: 20, offset: const Offset(0, -2)),
                 ],
               ),
               child: Row(
                 children: [
-                  _NavItem(
-                    icon: Icons.pie_chart_outline_rounded,
-                    activeIcon: Icons.pie_chart_rounded,
-                    label: 'Portfolio',
-                    index: 0,
-                    current: currentIndex,
-                    onTap: onTap,
-                  ),
-                  _NavItem(
-                    icon: Icons.bar_chart_outlined,
-                    activeIcon: Icons.bar_chart_rounded,
-                    label: 'Deposit',
-                    index: 1,
-                    current: currentIndex,
-                    onTap: onTap,
-                  ),
-                  // Centre space for FAB
+                  _NavItem(icon: Icons.pie_chart_outline_rounded,
+                      activeIcon: Icons.pie_chart_rounded,
+                      label: 'Portfolio', index: 0,
+                      current: currentIndex, onTap: onTap),
+                  _NavItem(icon: Icons.bar_chart_outlined,
+                      activeIcon: Icons.bar_chart_rounded,
+                      label: 'Deposit', index: 1,
+                      current: currentIndex, onTap: onTap),
                   const Expanded(child: SizedBox()),
-                  _NavItem(
-                    icon: Icons.money_rounded,
-                    activeIcon: Icons.money_rounded,
-                    label: 'Withdrawal',
-                    index: 3,
-                    current: currentIndex,
-                    onTap: onTap,
-                  ),
-                  _NavItem(
-                    icon: Icons.person_outline_rounded,
-                    activeIcon: Icons.person_rounded,
-                    label: 'Profile',
-                    index: 4,
-                    current: currentIndex,
-                    onTap: onTap,
-                  ),
+                  _NavItem(icon: Icons.money_rounded,
+                      activeIcon: Icons.money_rounded,
+                      label: 'Withdrawal', index: 3,
+                      current: currentIndex, onTap: onTap),
+                  _NavItem(icon: Icons.person_outline_rounded,
+                      activeIcon: Icons.person_rounded,
+                      label: 'Profile', index: 4,
+                      current: currentIndex, onTap: onTap),
                 ],
               ),
             ),
@@ -816,19 +859,14 @@ class _BottomNav extends StatelessWidget {
 }
 
 class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
+  final IconData icon, activeIcon;
   final String label;
   final int index, current;
   final ValueChanged<int> onTap;
 
   const _NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.index,
-    required this.current,
-    required this.onTap,
+    required this.icon, required this.activeIcon, required this.label,
+    required this.index, required this.current, required this.onTap,
   });
 
   @override
@@ -844,9 +882,8 @@ class _NavItem extends StatelessWidget {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
               transitionBuilder: (child, anim) => ScaleTransition(
-                scale: anim,
-                child: FadeTransition(opacity: anim, child: child),
-              ),
+                  scale: anim,
+                  child: FadeTransition(opacity: anim, child: child)),
               child: selected
                   ? Container(
                 key: const ValueKey('on'),
@@ -856,9 +893,7 @@ class _NavItem extends StatelessWidget {
                   color: _C.gold.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: _C.gold.withOpacity(0.28),
-                    width: 1,
-                  ),
+                      color: _C.gold.withOpacity(0.28), width: 1),
                 ),
                 child: Icon(activeIcon, size: 17, color: _C.gold),
               )
@@ -874,8 +909,7 @@ class _NavItem extends StatelessWidget {
               duration: const Duration(milliseconds: 200),
               style: TextStyle(
                 fontSize: 9,
-                fontWeight:
-                selected ? FontWeight.w700 : FontWeight.w400,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
                 color: selected ? _C.gold : _C.textMuted,
                 letterSpacing: 0.3,
               ),
@@ -888,10 +922,9 @@ class _NavItem extends StatelessWidget {
   }
 }
 
-// ─── Floating Action Button ───────────────────────────────────────────────────
+// ─── FAB ──────────────────────────────────────────────────────────────────────
 class _FAB extends StatefulWidget {
   const _FAB();
-
   @override
   State<_FAB> createState() => _FABState();
 }
@@ -905,15 +938,12 @@ class _FABState extends State<_FAB> with SingleTickerProviderStateMixin {
     super.initState();
     _ctrl = AnimationController(vsync: this,
         duration: const Duration(milliseconds: 100));
-    _scale = Tween(begin: 1.0, end: 0.90).animate(
-        CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _scale = Tween(begin: 1.0, end: 0.90)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
   }
 
   @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -947,17 +977,11 @@ class _FABState extends State<_FAB> with SingleTickerProviderStateMixin {
                 end: Alignment.bottomRight,
               ),
               boxShadow: [
-                BoxShadow(
-                  color: _C.gold.withOpacity(0.50),
-                  blurRadius: 22,
-                  offset: const Offset(0, 6),
-                  spreadRadius: -2,
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.40),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
+                BoxShadow(color: _C.gold.withOpacity(0.50),
+                    blurRadius: 22, offset: const Offset(0, 6),
+                    spreadRadius: -2),
+                BoxShadow(color: Colors.black.withOpacity(0.40),
+                    blurRadius: 12, offset: const Offset(0, 4)),
               ],
             ),
             child: const Icon(Icons.candlestick_chart_rounded,
@@ -971,11 +995,9 @@ class _FABState extends State<_FAB> with SingleTickerProviderStateMixin {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 class _GlowOrb extends StatelessWidget {
-  final double size;
+  final double size, opacity;
   final Color color;
-  final double opacity;
-  const _GlowOrb(
-      {required this.size, required this.color, required this.opacity});
+  const _GlowOrb({required this.size, required this.color, required this.opacity});
 
   @override
   Widget build(BuildContext context) {
@@ -995,9 +1017,8 @@ class _CardBgPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.drawArc(
       Rect.fromCircle(
-        center: Offset(size.width * 1.1, size.height * 0.5),
-        radius: size.width * 0.7,
-      ),
+          center: Offset(size.width * 1.1, size.height * 0.5),
+          radius: size.width * 0.7),
       math.pi * 0.6, math.pi * 0.6, false,
       Paint()
         ..color = const Color(0xFFD4A030).withOpacity(0.06)
@@ -1011,8 +1032,7 @@ class _CardBgPainter extends CustomPainter {
           const Color(0xFFD4A030).withOpacity(0.10),
           Colors.transparent,
         ]).createShader(Rect.fromCircle(
-            center: Offset(size.width * 0.9, size.height * 0.1),
-            radius: 80)),
+            center: Offset(size.width * 0.9, size.height * 0.1), radius: 80)),
     );
   }
 

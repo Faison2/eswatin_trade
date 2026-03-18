@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../dashboard/dashbord.dart';
 
 class LoginPage extends StatefulWidget {
@@ -103,19 +106,109 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  // ── Save session data to SharedPreferences ──────────────────────────────
+  Future<void> _saveSessionData({
+    required String sessionToken,
+    required Map<String, dynamic> profile,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString('session_token',   sessionToken);
+    await prefs.setString('forenames',        profile['Forenames']  ?? '');
+    await prefs.setString('surname',          profile['Surname']    ?? '');
+    await prefs.setString('full_name',        profile['FullName']   ?? '');
+    await prefs.setString('email',            profile['Email']      ?? '');
+    await prefs.setString('phone_number',     profile['PhoneNumber'] ?? '');
+    await prefs.setString('cds_number',       profile['CDSNumber']  ?? '');
+  }
+
+  // ── Handle login with API call ──────────────────────────────────────────
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 1800));
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const DashboardScreen(),
-        transitionsBuilder: (_, anim, __, child) =>
-            FadeTransition(opacity: anim, child: child),
-        transitionDuration: const Duration(milliseconds: 500),
+
+    try {
+      final response = await http
+          .post(
+        Uri.parse('https://app.trading-ese.com/eseapi/Home/Login'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept':       'application/json',
+        },
+        body: jsonEncode({
+          'email':    _emailController.text.trim(),
+          'password': _passwordController.text,
+        }),
+      )
+          .timeout(const Duration(seconds: 30));
+
+      if (!mounted) return;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 && data['responseCode'] == 200) {
+        // ── Success: save data and navigate ──────────────────────
+        await _saveSessionData(
+          sessionToken: data['sessionToken'] as String,
+          profile:      data['profile']      as Map<String, dynamic>,
+        );
+
+        if (!mounted) return;
+
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => const DashboardScreen(),
+            transitionsBuilder: (_, anim, __, child) =>
+                FadeTransition(opacity: anim, child: child),
+            transitionDuration: const Duration(milliseconds: 500),
+          ),
+        );
+      } else {
+        // ── Server returned a non-200 response code ───────────────
+        final message = data['responseMessage'] as String? ??
+            'Login failed. Please try again.';
+        _showErrorSnackbar(message);
+      }
+    } on http.ClientException catch (e) {
+      _showErrorSnackbar('Network error: ${e.message}');
+    } catch (e) {
+      _showErrorSnackbar('An unexpected error occurred. Please try again.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── Styled error snackbar ───────────────────────────────────────────────
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior:         SnackBarBehavior.floating,
+        backgroundColor:  const Color(0xFF1A0A0A),
+        margin:           const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: Color(0xFFEF5350), width: 1),
+        ),
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline_rounded,
+                color: Color(0xFFEF5350), size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color:      Colors.white,
+                  fontSize:   13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -263,7 +356,6 @@ class _LogoHero extends StatelessWidget {
                       'assets/images/logo.png',
                       width: 118,
                       height: 118,
-                   //   fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => _FallbackLogo(),
                     ),
                   ),
@@ -660,7 +752,7 @@ class _LoginCard extends StatelessWidget {
                       ),
                       validator: (v) {
                         if (v == null || v.isEmpty) return 'Password is required';
-                        if (v.length < 6) return 'Min. 6 characters';
+                        if (v.length < 4) return 'Min. 4 characters';
                         return null;
                       },
                     ),
@@ -1149,7 +1241,6 @@ class _PremiumBgPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Deep navy base
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
       Paint()
@@ -1160,7 +1251,6 @@ class _PremiumBgPainter extends CustomPainter {
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
     );
 
-    // Subtle dot grid
     final dotP = Paint()
       ..color = const Color(0xFFD4A030).withOpacity(0.035)
       ..style = PaintingStyle.fill;
@@ -1171,7 +1261,6 @@ class _PremiumBgPainter extends CustomPainter {
       }
     }
 
-    // Animated flowing chart line
     final linePaint = Paint()
       ..color = const Color(0xFFD4A030).withOpacity(0.07)
       ..strokeWidth = 1.2
@@ -1189,7 +1278,6 @@ class _PremiumBgPainter extends CustomPainter {
     }
     canvas.drawPath(path, linePaint);
 
-    // Second subtler chart line
     final linePaint2 = Paint()
       ..color = const Color(0xFF1565C0).withOpacity(0.06)
       ..strokeWidth = 1.0
@@ -1206,7 +1294,6 @@ class _PremiumBgPainter extends CustomPainter {
     }
     canvas.drawPath(path2, linePaint2);
 
-    // Thin horizontal grid lines
     final gridP = Paint()
       ..color = Colors.white.withOpacity(0.02)
       ..strokeWidth = 0.6;

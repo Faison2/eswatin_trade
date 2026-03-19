@@ -190,14 +190,14 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                         FadeTransition(
                           opacity: _cardFade,
-                          child: const _QuickActions(),
+                          child: const _PlaceOrderButton(),
                         ),
 
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 12),
 
                         FadeTransition(
-                          opacity: _contentFade,
-                          child: const _StatsRow(),
+                          opacity: _cardFade,
+                          child: const _ActionButtons(),
                         ),
 
                         const SizedBox(height: 22),
@@ -314,6 +314,8 @@ class _TopBar extends StatelessWidget {
                           fontSize: 13.5, fontWeight: FontWeight.w700,
                           color: _C.textPrim),
                     ),
+                    const SizedBox(width: 4),
+                    const Text('👋', style: TextStyle(fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 3),
@@ -529,44 +531,15 @@ class _SubStatDivider extends StatelessWidget {
       Container(width: 1, height: 28, color: _C.border.withOpacity(0.6));
 }
 
-// ─── Quick Actions ────────────────────────────────────────────────────────────
-class _QuickActions extends StatelessWidget {
-  const _QuickActions();
+// ─── Place Order Button ───────────────────────────────────────────────────────
+class _PlaceOrderButton extends StatefulWidget {
+  const _PlaceOrderButton();
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: _TradeButton(
-        onTap: () => Navigator.push(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (_, a, __) => const TradeScreen(),
-            transitionsBuilder: (_, a, __, child) => SlideTransition(
-              position: Tween(
-                begin: const Offset(0, 1),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(parent: a,
-                  curve: Curves.easeOutCubic)),
-              child: child,
-            ),
-            transitionDuration: const Duration(milliseconds: 380),
-          ),
-        ),
-      ),
-    );
-  }
+  State<_PlaceOrderButton> createState() => _PlaceOrderButtonState();
 }
 
-class _TradeButton extends StatefulWidget {
-  final VoidCallback onTap;
-  const _TradeButton({required this.onTap});
-
-  @override
-  State<_TradeButton> createState() => _TradeButtonState();
-}
-
-class _TradeButtonState extends State<_TradeButton>
+class _PlaceOrderButtonState extends State<_PlaceOrderButton>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _scale;
@@ -576,7 +549,7 @@ class _TradeButtonState extends State<_TradeButton>
     super.initState();
     _ctrl = AnimationController(vsync: this,
         duration: const Duration(milliseconds: 100));
-    _scale = Tween(begin: 1.0, end: 0.96)
+    _scale = Tween(begin: 1.0, end: 0.97)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
   }
 
@@ -585,95 +558,131 @@ class _TradeButtonState extends State<_TradeButton>
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scale,
-      child: GestureDetector(
-        onTapDown: (_) => _ctrl.forward(),
-        onTapUp: (_) { _ctrl.reverse(); widget.onTap(); },
-        onTapCancel: () => _ctrl.reverse(),
-        child: Container(
-          height: 58,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0E2A14), Color(0xFF1A3D1E), Color(0xFF0E2A14)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _C.gold.withOpacity(0.30), width: 1.2),
-            boxShadow: [
-              BoxShadow(color: _C.gold.withOpacity(0.12),
-                  blurRadius: 20, offset: const Offset(0, 6)),
-              BoxShadow(color: Colors.black.withOpacity(0.30),
-                  blurRadius: 12, offset: const Offset(0, 3)),
-            ],
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned(
-                left: 40, right: 40, top: 0,
-                child: Container(
-                  height: 1,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [
-                      Colors.transparent,
-                      _C.gold.withOpacity(0.20),
-                      Colors.transparent,
-                    ]),
-                  ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ScaleTransition(
+        scale: _scale,
+        child: GestureDetector(
+          onTapDown: (_) => _ctrl.forward(),
+          onTapUp: (_) {
+            _ctrl.reverse();
+            Navigator.push(
+              context,
+              PageRouteBuilder(
+                pageBuilder: (_, a, __) => const TradeScreen(),
+                transitionsBuilder: (_, a, __, child) => SlideTransition(
+                  position: Tween(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                      parent: a, curve: Curves.easeOutCubic)),
+                  child: child,
                 ),
+                transitionDuration: const Duration(milliseconds: 380),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 32, height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _C.gold.withOpacity(0.12),
-                      border: Border.all(
-                          color: _C.gold.withOpacity(0.30), width: 1),
-                    ),
-                    child: const Icon(Icons.candlestick_chart_rounded,
-                        color: _C.gold, size: 16),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text('Trade',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900,
-                          color: _C.gold, letterSpacing: 0.8)),
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _C.teal.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: _C.teal.withOpacity(0.25), width: 1),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.arrow_upward_rounded,
-                            color: _C.teal, size: 9),
-                        SizedBox(width: 2),
-                        Text('Buy', style: TextStyle(fontSize: 9,
-                            fontWeight: FontWeight.w700, color: _C.teal)),
-                        SizedBox(width: 6),
-                        SizedBox(width: 1, height: 10),
-                        SizedBox(width: 6),
-                        Icon(Icons.arrow_downward_rounded,
-                            color: _C.red, size: 9),
-                        SizedBox(width: 2),
-                        Text('Sell', style: TextStyle(fontSize: 9,
-                            fontWeight: FontWeight.w700, color: _C.red)),
-                      ],
-                    ),
-                  ),
-                ],
+            );
+          },
+          onTapCancel: () => _ctrl.reverse(),
+          child: Container(
+            width: double.infinity,
+            height: 62,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0A1F2E), Color(0xFF0D2A3A), Color(0xFF0A1F2E)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-            ],
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _C.gold.withOpacity(0.28), width: 1.2),
+              boxShadow: [
+                BoxShadow(color: _C.gold.withOpacity(0.10),
+                    blurRadius: 20, offset: const Offset(0, 6)),
+                BoxShadow(color: Colors.black.withOpacity(0.35),
+                    blurRadius: 12, offset: const Offset(0, 3)),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // ── Candlestick icon ─────────────────────────────────
+                Container(
+                  width: 34, height: 34,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _C.gold.withOpacity(0.12),
+                    border: Border.all(
+                        color: _C.gold.withOpacity(0.30), width: 1),
+                  ),
+                  child: const Icon(Icons.candlestick_chart_rounded,
+                      color: _C.gold, size: 17),
+                ),
+                const SizedBox(width: 12),
+
+                // ── "Place Order" label ──────────────────────────────
+                const Text('Place Order',
+                    style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: _C.textPrim,
+                        letterSpacing: 0.4)),
+
+                const SizedBox(width: 14),
+
+                // ── Vertical divider ─────────────────────────────────
+                Container(
+                  width: 1, height: 28,
+                  color: _C.border.withOpacity(0.6),
+                ),
+
+                const SizedBox(width: 14),
+
+                // ── Buy pill ─────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _C.teal.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: _C.teal.withOpacity(0.28), width: 1),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                    Icon(Icons.arrow_upward_rounded,
+                        color: _C.teal, size: 10),
+                    SizedBox(width: 3),
+                    Text('Buy',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: _C.teal)),
+                  ]),
+                ),
+
+                const SizedBox(width: 8),
+
+                // ── Sell pill ────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: _C.red.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: _C.red.withOpacity(0.28), width: 1),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                    Icon(Icons.arrow_downward_rounded,
+                        color: _C.red, size: 10),
+                    SizedBox(width: 3),
+                    Text('Sell',
+                        style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: _C.red)),
+                  ]),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -681,38 +690,42 @@ class _TradeButtonState extends State<_TradeButton>
   }
 }
 
-// ─── Stats Row ────────────────────────────────────────────────────────────────
-class _StatsRow extends StatelessWidget {
-  const _StatsRow();
+// ─── Action Buttons (My Orders · Deposit · Withdrawal · Settlements) ──────────
+class _ActionButtons extends StatelessWidget {
+  const _ActionButtons();
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 120,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        physics: const BouncingScrollPhysics(),
-        children: const [
-          _StatCard(
-            label: 'Cash Balance', value: 'E 12,480',
-            sub: '+E820 today', icon: Icons.account_balance_wallet_outlined,
-            accentColor: _C.teal,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          _ActionBtn(
+            icon:  Icons.receipt_long_rounded,
+            label: 'My Orders',
+            color: _C.gold,
+            onTap: () {}, // wire up later
           ),
-          _StatCard(
-            label: 'Pending Settlements', value: 'E 1,560',
-            sub: '3 pending', icon: Icons.hourglass_top_rounded,
-            accentColor: _C.blue,
+          const SizedBox(width: 10),
+          _ActionBtn(
+            icon:  Icons.account_balance_wallet_outlined,
+            label: 'Deposit',
+            color: _C.teal,
+            onTap: () {},
           ),
-          _StatCard(
-            label: 'Open Orders', value: '7',
-            sub: '2 expiring today', icon: Icons.receipt_long_outlined,
-            accentColor: _C.gold,
+          const SizedBox(width: 10),
+          _ActionBtn(
+            icon:  Icons.money_rounded,
+            label: 'Withdrawal',
+            color: _C.blue,
+            onTap: () {},
           ),
-          _StatCard(
-            label: 'Matched Orders', value: '3',
-            sub: 'This week', icon: Icons.check_circle_outline_rounded,
-            accentColor: _C.teal,
+          const SizedBox(width: 10),
+          _ActionBtn(
+            icon:  Icons.swap_horiz_rounded,
+            label: 'Settlements',
+            color: const Color(0xFF9C6ADE),
+            onTap: () {},
           ),
         ],
       ),
@@ -720,79 +733,93 @@ class _StatsRow extends StatelessWidget {
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final String label, value, sub;
+class _ActionBtn extends StatefulWidget {
   final IconData icon;
-  final Color accentColor;
+  final String   label;
+  final Color    color;
+  final VoidCallback onTap;
 
-  const _StatCard({
-    required this.label, required this.value, required this.sub,
-    required this.icon, required this.accentColor,
+  const _ActionBtn({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
   });
 
   @override
+  State<_ActionBtn> createState() => _ActionBtnState();
+}
+
+class _ActionBtnState extends State<_ActionBtn>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this,
+        duration: const Duration(milliseconds: 90));
+    _scale = Tween(begin: 1.0, end: 0.92)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 148,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: _C.card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accentColor.withOpacity(0.18), width: 1),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.25),
-              blurRadius: 12, offset: const Offset(0, 4)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 28, height: 28,
-                decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8),
+    return Expanded(
+      child: ScaleTransition(
+        scale: _scale,
+        child: GestureDetector(
+          onTapDown:   (_) => _ctrl.forward(),
+          onTapUp:     (_) { _ctrl.reverse(); widget.onTap(); },
+          onTapCancel: ()  => _ctrl.reverse(),
+          child: Container(
+            height: 72,
+            decoration: BoxDecoration(
+              color: _C.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: widget.color.withOpacity(0.20), width: 1),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.22),
+                    blurRadius: 10, offset: const Offset(0, 3)),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 34, height: 34,
+                  decoration: BoxDecoration(
+                    color: widget.color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                        color: widget.color.withOpacity(0.22), width: 1),
+                  ),
+                  child: Icon(widget.icon,
+                      color: widget.color, size: 16),
                 ),
-                child: Icon(icon, color: accentColor, size: 14),
-              ),
-              const Spacer(),
-              Container(
-                width: 5, height: 5,
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: accentColor.withOpacity(0.5)),
-              ),
-            ],
+                const SizedBox(height: 5),
+                Text(widget.label,
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: _C.textSub,
+                        letterSpacing: 0.2),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w900,
-                      color: _C.textPrim, letterSpacing: -0.5, height: 1.1)),
-              const SizedBox(height: 3),
-              Text(label,
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                      fontSize: 9, color: _C.textSub, letterSpacing: 0.4)),
-              const SizedBox(height: 3),
-              Text(sub,
-                  style: TextStyle(
-                      fontSize: 9.5,
-                      color: accentColor.withOpacity(0.85),
-                      fontWeight: FontWeight.w600)),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
+
 
 // ─── Bottom Navigation ────────────────────────────────────────────────────────
 class _BottomNav extends StatelessWidget {

@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ─── Color Palette ────────────────────────────────────────────────────────────
 class _C {
@@ -31,122 +34,198 @@ class _Stock {
   final bool positive;
   final List<double> series;
   final List<_Candle> candles;
-  const _Stock({
-    required this.ticker, required this.name, required this.sector,
-    required this.price, required this.open, required this.high,
-    required this.low, required this.change, required this.changePercent,
-    required this.volume, required this.positive,
-    required this.series, required this.candles,
-  });
-}
 
-// ─── ESE Data ─────────────────────────────────────────────────────────────────
-const List<_Stock> _stocks = [
-  _Stock(
-    ticker: 'CBEET', name: 'Commercial Bank of Ethiopia',
-    sector: 'Banking', price: 42.50, open: 41.80, high: 43.10, low: 41.50,
-    change: 1.20, changePercent: 2.91, volume: 3.4, positive: true,
-    series: [0.42,0.40,0.38,0.43,0.48,0.45,0.50,0.52,0.49,0.55,0.58,0.60,0.57,0.63,0.68,0.65,0.70,0.74,0.71,0.78],
-    candles: [
-      _Candle(38.0,39.5,37.2,39.1), _Candle(39.1,40.2,38.8,39.8),
-      _Candle(39.8,41.0,39.4,40.6), _Candle(40.6,40.9,39.8,40.2),
-      _Candle(40.2,41.5,39.9,41.3), _Candle(41.3,42.0,40.8,41.8),
-      _Candle(41.8,42.5,41.2,41.5), _Candle(41.5,42.8,41.0,42.2),
-      _Candle(42.2,43.1,41.8,41.9), _Candle(41.9,43.1,41.5,42.5),
-    ],
-  ),
-  _Stock(
-    ticker: 'AWBET', name: 'Awash Bank',
-    sector: 'Banking', price: 38.75, open: 39.20, high: 39.40, low: 38.50,
-    change: -0.45, changePercent: -1.15, volume: 2.1, positive: false,
-    series: [0.60,0.62,0.65,0.61,0.58,0.63,0.60,0.55,0.57,0.53,0.50,0.52,0.48,0.50,0.46,0.44,0.47,0.43,0.41,0.38],
-    candles: [
-      _Candle(40.5,41.0,39.8,40.8), _Candle(40.8,41.2,40.2,40.3),
-      _Candle(40.3,40.8,39.6,39.7), _Candle(39.7,40.2,39.2,40.0),
-      _Candle(40.0,40.5,39.4,39.5), _Candle(39.5,40.0,39.0,39.8),
-      _Candle(39.8,40.1,39.2,39.3), _Candle(39.3,39.8,38.8,39.6),
-      _Candle(39.6,39.9,38.7,38.9), _Candle(38.9,39.4,38.5,38.75),
-    ],
-  ),
-  _Stock(
-    ticker: 'DASHET', name: 'Dashen Bank',
-    sector: 'Banking', price: 35.20, open: 34.80, high: 35.60, low: 34.60,
-    change: 0.80, changePercent: 2.32, volume: 1.8, positive: true,
-    series: [0.30,0.32,0.28,0.35,0.38,0.34,0.40,0.42,0.39,0.45,0.48,0.46,0.50,0.53,0.51,0.56,0.58,0.55,0.61,0.64],
-    candles: [
-      _Candle(33.0,33.8,32.5,33.5), _Candle(33.5,34.2,33.1,34.0),
-      _Candle(34.0,34.5,33.6,33.8), _Candle(33.8,34.8,33.5,34.6),
-      _Candle(34.6,35.0,34.2,34.8), _Candle(34.8,35.2,34.4,35.0),
-      _Candle(35.0,35.5,34.7,34.9), _Candle(34.9,35.6,34.6,35.3),
-      _Candle(35.3,35.8,35.0,35.1), _Candle(35.1,35.6,34.6,35.2),
-    ],
-  ),
-  _Stock(
-    ticker: 'ETTEL', name: 'Ethio Telecom',
-    sector: 'Telecom', price: 88.00, open: 85.50, high: 89.00, low: 85.00,
-    change: 3.00, changePercent: 3.53, volume: 5.6, positive: true,
-    series: [0.35,0.38,0.42,0.45,0.40,0.48,0.52,0.55,0.50,0.58,0.62,0.65,0.60,0.68,0.72,0.70,0.75,0.78,0.74,0.82],
-    candles: [
-      _Candle(82.0,83.5,81.0,83.0), _Candle(83.0,84.5,82.5,84.0),
-      _Candle(84.0,85.0,83.2,83.5), _Candle(83.5,85.5,83.0,85.0),
-      _Candle(85.0,86.0,84.5,85.5), _Candle(85.5,87.0,85.0,86.5),
-      _Candle(86.5,87.5,85.8,86.8), _Candle(86.8,88.5,86.2,87.8),
-      _Candle(87.8,89.0,87.0,87.5), _Candle(87.5,89.0,85.0,88.0),
-    ],
-  ),
-  _Stock(
-    ticker: 'ETBREW', name: 'Ethiopian Breweries',
-    sector: 'FMCG', price: 55.00, open: 53.00, high: 55.80, low: 52.80,
-    change: 2.50, changePercent: 4.76, volume: 4.2, positive: true,
-    series: [0.25,0.30,0.35,0.28,0.40,0.38,0.45,0.50,0.48,0.55,0.60,0.58,0.63,0.68,0.65,0.70,0.72,0.68,0.75,0.80],
-    candles: [
-      _Candle(50.0,51.5,49.5,51.0), _Candle(51.0,52.0,50.5,51.5),
-      _Candle(51.5,52.5,50.8,50.8), _Candle(50.8,52.8,50.5,52.5),
-      _Candle(52.5,53.5,52.0,53.0), _Candle(53.0,54.0,52.5,53.8),
-      _Candle(53.8,54.5,53.2,53.5), _Candle(53.5,55.0,53.2,54.8),
-      _Candle(54.8,55.8,54.2,54.5), _Candle(54.5,55.8,52.8,55.0),
-    ],
-  ),
-  _Stock(
-    ticker: 'ABYET', name: 'Abyssinia Bank',
-    sector: 'Banking', price: 29.60, open: 29.90, high: 30.10, low: 29.40,
-    change: -0.30, changePercent: -1.00, volume: 0.9, positive: false,
-    series: [0.65,0.60,0.62,0.58,0.60,0.55,0.57,0.53,0.55,0.50,0.52,0.48,0.50,0.47,0.49,0.44,0.46,0.43,0.45,0.42],
-    candles: [
-      _Candle(31.0,31.5,30.5,30.8), _Candle(30.8,31.2,30.3,30.5),
-      _Candle(30.5,31.0,30.0,30.8), _Candle(30.8,31.0,30.2,30.3),
-      _Candle(30.3,30.8,29.8,30.5), _Candle(30.5,30.8,29.9,30.0),
-      _Candle(30.0,30.5,29.6,30.2), _Candle(30.2,30.5,29.7,29.8),
-      _Candle(29.8,30.2,29.5,30.0), _Candle(30.0,30.1,29.4,29.6),
-    ],
-  ),
-  _Stock(
-    ticker: 'NBET', name: 'Nib Bank',
-    sector: 'Banking', price: 24.10, open: 23.70, high: 24.40, low: 23.60,
-    change: 0.55, changePercent: 2.33, volume: 0.7, positive: true,
-    series: [0.38,0.35,0.40,0.42,0.39,0.45,0.43,0.48,0.50,0.47,0.52,0.55,0.52,0.57,0.60,0.58,0.62,0.65,0.62,0.68],
-    candles: [
-      _Candle(22.5,23.0,22.0,22.8), _Candle(22.8,23.2,22.4,23.0),
-      _Candle(23.0,23.5,22.8,22.9), _Candle(22.9,23.6,22.7,23.4),
-      _Candle(23.4,23.8,23.0,23.6), _Candle(23.6,24.0,23.3,23.8),
-      _Candle(23.8,24.2,23.5,23.7), _Candle(23.7,24.2,23.5,24.0),
-      _Candle(24.0,24.4,23.8,23.9), _Candle(23.9,24.4,23.6,24.1),
-    ],
-  ),
-  _Stock(
-    ticker: 'MBET', name: 'Meta Abo Brewery',
-    sector: 'FMCG', price: 46.30, open: 47.00, high: 47.20, low: 46.10,
-    change: -1.10, changePercent: -2.32, volume: 1.5, positive: false,
-    series: [0.70,0.68,0.65,0.68,0.62,0.64,0.60,0.62,0.58,0.55,0.57,0.53,0.55,0.51,0.52,0.48,0.50,0.46,0.44,0.42],
-    candles: [
-      _Candle(48.5,49.0,47.8,48.2), _Candle(48.2,48.8,47.5,47.8),
-      _Candle(47.8,48.5,47.3,48.2), _Candle(48.2,48.5,47.5,47.6),
-      _Candle(47.6,48.2,47.0,47.8), _Candle(47.8,48.0,47.2,47.2),
-      _Candle(47.2,47.8,46.8,47.5), _Candle(47.5,47.8,46.8,46.9),
-      _Candle(46.9,47.5,46.5,47.2), _Candle(47.2,47.2,46.1,46.3),
-    ],
-  ),
-];
+  const _Stock({
+    required this.ticker,
+    required this.name,
+    required this.sector,
+    required this.price,
+    required this.open,
+    required this.high,
+    required this.low,
+    required this.change,
+    required this.changePercent,
+    required this.volume,
+    required this.positive,
+    required this.series,
+    required this.candles,
+  });
+
+  // ── Build from API JSON ──────────────────────────────────────────────────
+  factory _Stock.fromJson(Map<String, dynamic> j) {
+    final double lastPrice    = (j['lastPrice']     as num? ?? 0).toDouble();
+    final double openingPrice = (j['openingPrice']  as num? ?? 0).toDouble();
+    final double closingPrice = (j['closingPrice']  as num? ?? lastPrice).toDouble();
+    final double highestPrice = (j['highestPrice']  as num? ?? lastPrice).toDouble();
+    final double lowestPrice  = (j['lowestPrice']   as num? ?? lastPrice).toDouble();
+    final double changeVal    = (j['changeValue']   as num? ?? 0).toDouble();
+    final double changePct    = (j['changePercent'] as num? ?? 0).toDouble();
+    final double shareVolume  = (j['shareVolume']   as num? ?? 0).toDouble();
+    final String trend        = (j['trend']         as String? ?? 'FLAT').toUpperCase();
+    final String fullname     = (j['fullname']      as String? ?? 'Unknown').trim();
+    final String companyCode  = (j['company']       as String? ?? '');
+
+    // Effective change direction
+    double effectivePct = changePct;
+    if (effectivePct == 0) {
+      if (trend == 'UP')   effectivePct =  0.01;
+      if (trend == 'DOWN') effectivePct = -0.01;
+    }
+    final bool positive = effectivePct >= 0;
+
+    // Ticker from company code or name abbreviation
+    final String ticker = _deriveTicker(companyCode, fullname);
+
+    // Sector heuristic from name keywords
+    final String sector = _deriveSector(fullname);
+
+    // Sparkline series (20 points normalised 0-1)
+    final List<double> series = _buildSeries(
+      open: openingPrice, close: closingPrice,
+      high: highestPrice, low: lowestPrice,
+      last: lastPrice,    trend: trend,
+    );
+
+    // Candles (10 synthetic candles from available price data)
+    final List<_Candle> candles = _buildCandles(
+      open: openingPrice, close: closingPrice,
+      high: highestPrice, low: lowestPrice,
+      last: lastPrice,    trend: trend,
+    );
+
+    return _Stock(
+      ticker:        ticker,
+      name:          fullname,
+      sector:        sector,
+      price:         lastPrice,
+      open:          openingPrice,
+      high:          highestPrice,
+      low:           lowestPrice,
+      change:        changeVal,
+      changePercent: effectivePct,
+      volume:        shareVolume,
+      positive:      positive,
+      series:        series,
+      candles:       candles,
+    );
+  }
+
+  // ── Derive short ticker ──────────────────────────────────────────────────
+  static String _deriveTicker(String code, String name) {
+    // Strip digits from code, keep letters
+    final letters = code.replaceAll(RegExp(r'[^A-Za-z]'), '');
+    if (letters.isNotEmpty && letters.length <= 6) return letters.toUpperCase();
+
+    // Abbreviate first letters of each word (max 5)
+    final words = name.trim().split(RegExp(r'\s+'));
+    if (words.length == 1) {
+      return words.first.substring(0, math.min(5, words.first.length))
+          .toUpperCase();
+    }
+    return words
+        .where((w) => w.isNotEmpty)
+        .take(5)
+        .map((w) => w[0].toUpperCase())
+        .join();
+  }
+
+  // ── Derive sector from name keywords ────────────────────────────────────
+  static String _deriveSector(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('bank') || n.contains('nedbank') || n.contains('fnb') ||
+        n.contains('capital') || n.contains('financial') ||
+        n.contains('investment')) return 'Finance';
+    if (n.contains('sugar') || n.contains('brew') || n.contains('food') ||
+        n.contains('beverag')) return 'FMCG';
+    if (n.contains('telecom') || n.contains('wireless') ||
+        n.contains('mobile')) return 'Telecom';
+    if (n.contains('property') || n.contains('real estate') ||
+        n.contains('precast') || n.contains('construction')) return 'Real Estate';
+    if (n.contains('empow') || n.contains('partners') ||
+        n.contains('limited')) return 'Diversified';
+    return 'Other';
+  }
+
+  // ── Build 20-point normalised sparkline series ──────────────────────────
+  static List<double> _buildSeries({
+    required double open,  required double close,
+    required double high,  required double low,
+    required double last,  required String trend,
+  }) {
+    final prices = [open, close, high, low, last].where((p) => p > 0).toList();
+    if (prices.isEmpty) return List.filled(20, 0.5);
+
+    final minP  = prices.reduce(math.min);
+    final maxP  = prices.reduce(math.max);
+    final range = (maxP - minP).abs();
+
+    // normalise: high value → near 1 (top of chart canvas is inverted)
+    double norm(double v) =>
+        range == 0 ? 0.5 : ((v - minP) / range).clamp(0.0, 1.0);
+
+    final rng     = math.Random((open * 100).toInt() ^ (last * 100).toInt());
+    final goingUp = trend == 'UP' || last >= open;
+    final List<double> pts = [];
+
+    for (int i = 0; i < 20; i++) {
+      final t    = i / 19.0;
+      final base = open + (last - open) * t;
+
+      // Add a bump at the midpoint — high if going up, low if going down
+      double bump = 0;
+      if (i >= 7 && i <= 12) {
+        final mid = (i - 7) / 5.0; // 0→1→0 tent
+        final tent = mid < 0.5 ? mid * 2 : (1 - mid) * 2;
+        bump = (goingUp ? 1 : -1) * (range * 0.25) * tent;
+      }
+
+      final wiggle = range * 0.08 * (rng.nextDouble() - 0.5);
+      final raw    = (base + bump + wiggle).clamp(minP, maxP);
+      pts.add(norm(raw));
+    }
+
+    return pts;
+  }
+
+  // ── Build 10 synthetic candles ──────────────────────────────────────────
+  static List<_Candle> _buildCandles({
+    required double open,  required double close,
+    required double high,  required double low,
+    required double last,  required String trend,
+  }) {
+    final prices = [open, close, high, low, last].where((p) => p > 0).toList();
+    if (prices.isEmpty) return List.filled(10, const _Candle(1,1,1,1));
+
+    final minP    = prices.reduce(math.min);
+    final maxP    = prices.reduce(math.max);
+    final range   = (maxP - minP).abs();
+    final goingUp = trend == 'UP' || last >= open;
+    final rng     = math.Random((open * 100).toInt() ^ (close * 100).toInt());
+
+    final List<_Candle> candles = [];
+
+    for (int i = 0; i < 10; i++) {
+      final t    = i / 9.0;
+      final base = open + (last - open) * t;
+      final body = range * 0.05 * (rng.nextDouble() + 0.3);
+      final wick = range * 0.04 * (rng.nextDouble() + 0.2);
+
+      final isBull = goingUp
+          ? rng.nextDouble() > 0.35
+          : rng.nextDouble() > 0.65;
+
+      final cOpen  = (base - (isBull ? body : 0)).clamp(minP, maxP);
+      final cClose = (base + (isBull ? body : 0) -
+          (isBull ? 0 : body)).clamp(minP, maxP);
+      final cHigh  = (math.max(cOpen, cClose) + wick).clamp(minP, maxP);
+      final cLow   = (math.min(cOpen, cClose) - wick).clamp(minP, maxP);
+
+      candles.add(_Candle(cOpen, cHigh, cLow, cClose));
+    }
+
+    return candles;
+  }
+}
 
 // ─── Market Watch Screen ──────────────────────────────────────────────────────
 class MarketWatchScreen extends StatefulWidget {
@@ -158,13 +237,16 @@ class MarketWatchScreen extends StatefulWidget {
 class _MarketWatchScreenState extends State<MarketWatchScreen>
     with TickerProviderStateMixin {
   late AnimationController _entranceCtrl;
-  late Animation<double> _fade;
+  late Animation<double>   _fade;
 
-  // Each card has its own chart mode (0 = line, 1 = candle)
+  List<_Stock> _stocks    = [];
+  bool         _loading   = true;
+  String?      _error;
+  DateTime?    _lastFetch;
+
   final Map<String, int> _chartModes = {};
-
   String _sectorFilter = 'All';
-  final _sectors = ['All', 'Banking', 'Telecom', 'FMCG', 'Insurance'];
+  List<String> _sectors = ['All'];
 
   @override
   void initState() {
@@ -172,19 +254,86 @@ class _MarketWatchScreenState extends State<MarketWatchScreen>
     _entranceCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 700));
     _fade = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
-    _entranceCtrl.forward();
-    // Default all to line chart
-    for (final s in _stocks) {
-      _chartModes[s.ticker] = 0;
-    }
+    _fetchMarketData();
   }
 
   @override
   void dispose() { _entranceCtrl.dispose(); super.dispose(); }
 
+  // ── Fetch from API ────────────────────────────────────────────────────────
+  Future<void> _fetchMarketData() async {
+    setState(() { _loading = true; _error = null; });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('session_token') ?? '';
+
+      final response = await http.get(
+        Uri.parse('https://app.trading-ese.com/eseapi/Home/MarketWatch'),
+        headers: {
+          'Content-Type':  'application/json',
+          'Accept':        'application/json',
+          'Authorization': 'Bearer $token',
+          'sessionToken':  token,
+        },
+      ).timeout(const Duration(seconds: 20));
+
+      if (!mounted) return;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 &&
+          (data['responseCode'] == 200 || data['securities'] != null)) {
+        final rawList = data['securities'] as List<dynamic>? ?? [];
+        final stocks  = rawList
+            .map((s) => _Stock.fromJson(s as Map<String, dynamic>))
+            .toList();
+
+        // Build sector list from loaded data
+        final sectorSet = <String>{'All'};
+        for (final s in stocks) sectorSet.add(s.sector);
+
+        // Default chart mode for each
+        for (final s in stocks) {
+          _chartModes.putIfAbsent(s.ticker, () => 0);
+        }
+
+        _entranceCtrl.reset();
+
+        setState(() {
+          _stocks      = stocks;
+          _sectors     = sectorSet.toList();
+          _loading     = false;
+          _lastFetch   = DateTime.now();
+          // Reset filter if current sector no longer exists
+          if (!_sectors.contains(_sectorFilter)) _sectorFilter = 'All';
+        });
+
+        _entranceCtrl.forward();
+      } else {
+        setState(() {
+          _error   = data['responseMessage'] as String? ??
+              'Failed to load market data.';
+          _loading = false;
+        });
+      }
+    } on http.ClientException catch (e) {
+      if (mounted) setState(() { _error = 'Network error: ${e.message}'; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _error = 'Unable to reach ESE servers.'; _loading = false; });
+    }
+  }
+
   List<_Stock> get _filtered => _sectorFilter == 'All'
       ? _stocks
       : _stocks.where((s) => s.sector == _sectorFilter).toList();
+
+  String get _timeLabel {
+    if (_lastFetch == null) return 'Fetching…';
+    final h = _lastFetch!.hour.toString().padLeft(2, '0');
+    final m = _lastFetch!.minute.toString().padLeft(2, '0');
+    return 'Updated $h:$m';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,51 +346,58 @@ class _MarketWatchScreenState extends State<MarketWatchScreen>
       backgroundColor: _C.bg,
       extendBodyBehindAppBar: true,
       appBar: _buildAppBar(context),
-      body: Stack(
-        children: [
-          Positioned(top: -40, right: -60, child: _Orb(220, _C.teal, 0.05)),
-          Positioned(bottom: 100, left: -60, child: _Orb(180, _C.blue, 0.05)),
+      body: Stack(children: [
+        Positioned(top: -40, right: -60, child: _Orb(220, _C.teal, 0.05)),
+        Positioned(bottom: 100, left: -60, child: _Orb(180, _C.blue, 0.05)),
 
+        // ── Loading ────────────────────────────────────────────────────
+        if (_loading)
+          _FullLoadingState()
+
+        // ── Error ──────────────────────────────────────────────────────
+        else if (_error != null)
+          _FullErrorState(message: _error!, onRetry: _fetchMarketData)
+
+        // ── Content ────────────────────────────────────────────────────
+        else
           FadeTransition(
             opacity: _fade,
-            child: Column(
-              children: [
-                SizedBox(height: MediaQuery.of(context).padding.top +
-                    kToolbarHeight + 10),
+            child: Column(children: [
+              SizedBox(height: MediaQuery.of(context).padding.top +
+                  kToolbarHeight + 10),
 
-                // Sector chips
-                _SectorChips(
-                  sectors: _sectors, selected: _sectorFilter,
-                  onSelect: (s) => setState(() => _sectorFilter = s),
+              // Sector chips
+              _SectorChips(
+                sectors:  _sectors,
+                selected: _sectorFilter,
+                onSelect: (s) => setState(() => _sectorFilter = s),
+              ),
+              const SizedBox(height: 8),
+
+              // Summary strip
+              _MarketSummary(stocks: _filtered),
+              const SizedBox(height: 8),
+
+              // Cards
+              Expanded(
+                child: ListView.builder(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
+                  itemCount: _filtered.length,
+                  itemBuilder: (_, i) {
+                    final s = _filtered[i];
+                    return _StockCard(
+                      stock:       s,
+                      chartMode:   _chartModes[s.ticker] ?? 0,
+                      onChartMode: (m) =>
+                          setState(() => _chartModes[s.ticker] = m),
+                    );
+                  },
                 ),
-                const SizedBox(height: 8),
-
-                // Summary
-                _MarketSummary(stocks: _filtered),
-                const SizedBox(height: 8),
-
-                // Cards — always big, always showing chart
-                Expanded(
-                  child: ListView.builder(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
-                    itemCount: _filtered.length,
-                    itemBuilder: (_, i) {
-                      final s = _filtered[i];
-                      return _StockCard(
-                        stock: s,
-                        chartMode: _chartModes[s.ticker] ?? 0,
-                        onChartMode: (m) =>
-                            setState(() => _chartModes[s.ticker] = m),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ]),
           ),
-        ],
-      ),
+      ]),
     );
   }
 
@@ -278,24 +434,90 @@ class _MarketWatchScreenState extends State<MarketWatchScreen>
                     decoration: const BoxDecoration(
                         shape: BoxShape.circle, color: _C.teal)),
                 const SizedBox(width: 5),
-                const Text('Live  ·  Thu 12 Mar 2026  09:44 EAT',
-                    style: TextStyle(fontSize: 9, color: _C.textSub)),
+                Text('Live  ·  $_timeLabel',
+                    style: const TextStyle(fontSize: 9, color: _C.textSub)),
               ]),
             ]),
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 12),
-                child: Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(color: _C.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: _C.border, width: 1)),
-                  child: const Icon(Icons.refresh_rounded,
-                      color: _C.textSub, size: 16),
+                child: GestureDetector(
+                  onTap: _fetchMarketData,
+                  child: Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(color: _C.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _C.border, width: 1)),
+                    child: const Icon(Icons.refresh_rounded,
+                        color: _C.textSub, size: 16),
+                  ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Full Loading State ───────────────────────────────────────────────────────
+class _FullLoadingState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(
+              color: _C.gold, strokeWidth: 2.5),
+          const SizedBox(height: 16),
+          Text('Loading market data…',
+              style: TextStyle(fontSize: 13, color: _C.textSub)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Full Error State ─────────────────────────────────────────────────────────
+class _FullErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _FullErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.wifi_off_rounded,
+                color: _C.red.withOpacity(0.65), size: 40),
+            const SizedBox(height: 14),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: _C.textSub)),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: onRetry,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 28, vertical: 11),
+                decoration: BoxDecoration(
+                  color: _C.gold.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: _C.gold.withOpacity(0.30), width: 1),
+                ),
+                child: const Text('Retry',
+                    style: TextStyle(fontSize: 13,
+                        fontWeight: FontWeight.w700, color: _C.gold)),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -320,7 +542,7 @@ class _SectorChips extends StatelessWidget {
         physics: const BouncingScrollPhysics(),
         itemCount: sectors.length,
         itemBuilder: (_, i) {
-          final s = sectors[i];
+          final s      = sectors[i];
           final active = s == selected;
           return GestureDetector(
             onTap: () => onSelect(s),
@@ -332,7 +554,8 @@ class _SectorChips extends StatelessWidget {
                 color: active ? _C.gold.withOpacity(0.15) : _C.card,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                    color: active ? _C.gold.withOpacity(0.40) : _C.border,
+                    color: active
+                        ? _C.gold.withOpacity(0.40) : _C.border,
                     width: 1),
               ),
               child: Text(s, style: TextStyle(
@@ -356,9 +579,11 @@ class _MarketSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final gainers = stocks.where((s) => s.positive).length;
     final losers  = stocks.length - gainers;
-    final avg     = stocks.isEmpty ? 0.0
-        : stocks.map((s) => s.changePercent).reduce((a, b) => a + b)
-        / stocks.length;
+    final avg     = stocks.isEmpty
+        ? 0.0
+        : stocks.map((s) => s.changePercent).reduce((a, b) => a + b) /
+        stocks.length;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -367,11 +592,11 @@ class _MarketSummary extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: _C.border, width: 1)),
         child: Row(children: [
-          _SumTile('Stocks',  '${stocks.length}',  _C.textPrim),
+          _SumTile('Stocks',  '${stocks.length}', _C.textPrim),
           _SumDiv(),
-          _SumTile('Gainers', '$gainers',           _C.teal),
+          _SumTile('Gainers', '$gainers',          _C.teal),
           _SumDiv(),
-          _SumTile('Losers',  '$losers',            _C.red),
+          _SumTile('Losers',  '$losers',           _C.red),
           _SumDiv(),
           _SumTile('Avg',
               '${avg >= 0 ? '+' : ''}${avg.toStringAsFixed(2)}%',
@@ -389,10 +614,10 @@ class _SumTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Expanded(
     child: Column(children: [
-      Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900,
-          color: color, letterSpacing: -0.3)),
-      Text(label, style: const TextStyle(
-          fontSize: 8.5, color: _C.textSub, letterSpacing: 0.4)),
+      Text(value, style: TextStyle(fontSize: 15,
+          fontWeight: FontWeight.w900, color: color, letterSpacing: -0.3)),
+      Text(label, style: const TextStyle(fontSize: 8.5,
+          color: _C.textSub, letterSpacing: 0.4)),
     ]),
   );
 }
@@ -403,7 +628,7 @@ class _SumDiv extends StatelessWidget {
       Container(width: 1, height: 26, color: _C.border);
 }
 
-// ─── Stock Card — always fully expanded ───────────────────────────────────────
+// ─── Stock Card ───────────────────────────────────────────────────────────────
 class _StockCard extends StatelessWidget {
   final _Stock stock;
   final int chartMode;
@@ -436,180 +661,160 @@ class _StockCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Column(children: [
 
-          // ══════════════════════════════════════════════════════════════
-          //  FULL-BLEED CHART ZONE
-          // ══════════════════════════════════════════════════════════════
+          // ── Chart zone ─────────────────────────────────────────────
           SizedBox(
             height: 175,
             width: double.infinity,
-            child: Stack(
-              children: [
+            child: Stack(children: [
 
-                // ── Chart painter fills every pixel ──────────────────
-                Positioned.fill(
-                  child: chartMode == 0
-                      ? CustomPaint(
-                      painter: _FullAreaPainter(
-                          series: stock.series, color: color))
-                      : CustomPaint(
-                      painter: _FullCandlePainter(
-                          candles: stock.candles,
-                          bullColor: _C.teal,
-                          bearColor: _C.red)),
-                ),
+              // Chart fills every pixel
+              Positioned.fill(
+                child: chartMode == 0
+                    ? CustomPaint(
+                    painter: _FullAreaPainter(
+                        series: stock.series, color: color))
+                    : CustomPaint(
+                    painter: _FullCandlePainter(
+                        candles: stock.candles,
+                        bullColor: _C.teal,
+                        bearColor: _C.red)),
+              ),
 
-                // ── Top fade so overlay text stays readable ───────────
-                Positioned(
-                  top: 0, left: 0, right: 0,
-                  child: Container(
-                    height: 70,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          _C.card.withOpacity(0.85),
-                          _C.card.withOpacity(0.0),
-                        ],
-                      ),
+              // Top fade for readability
+              Positioned(top: 0, left: 0, right: 0,
+                child: Container(
+                  height: 70,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        _C.card.withOpacity(0.85),
+                        _C.card.withOpacity(0.0),
+                      ],
                     ),
                   ),
                 ),
+              ),
 
-                // ── Company info — top left ────────────────────────────
-                Positioned(top: 12, left: 14,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        // Ticker pill
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 9, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: color.withOpacity(0.20),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: color.withOpacity(0.45), width: 1),
-                          ),
-                          child: Text(stock.ticker,
-                              style: TextStyle(fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  color: color, letterSpacing: 0.6)),
-                        ),
-                        const SizedBox(width: 8),
-                        // Sector pill
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.30),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(stock.sector,
-                              style: const TextStyle(
-                                  fontSize: 9, color: _C.textSub)),
-                        ),
-                      ]),
-                      const SizedBox(height: 6),
-                      // Company name
-                      SizedBox(
-                        width: MediaQuery.of(context).size.width - 130,
-                        child: Text(stock.name,
-                            style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: _C.textSub,
-                                height: 1.2),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ── Price + change — top right ────────────────────────
-                Positioned(top: 12, right: 14,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('E ${stock.price.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              color: _C.textPrim,
-                              letterSpacing: -0.6,
-                              height: 1)),
-                      const SizedBox(height: 4),
+              // Company info — top left
+              Positioned(top: 12, left: 14,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 9, vertical: 4),
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.15),
+                          color: color.withOpacity(0.20),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                              color: color.withOpacity(0.35), width: 1),
+                              color: color.withOpacity(0.45), width: 1),
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                                stock.positive
-                                    ? Icons.arrow_upward_rounded
-                                    : Icons.arrow_downward_rounded,
-                                color: color, size: 11),
-                            const SizedBox(width: 3),
-                            Text(
-                                '${stock.positive ? '+' : ''}${stock.changePercent.toStringAsFixed(2)}%',
-                                style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: color)),
-                          ],
-                        ),
+                        child: Text(stock.ticker,
+                            style: TextStyle(fontSize: 10,
+                                fontWeight: FontWeight.w900,
+                                color: color, letterSpacing: 0.6)),
                       ),
-                    ],
-                  ),
-                ),
-
-                // ── Chart type toggle — bottom left of chart ──────────
-                Positioned(bottom: 8, left: 14,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                      child: Container(
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _C.surface.withOpacity(0.75),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: _C.border.withOpacity(0.60), width: 1),
+                          color: Colors.black.withOpacity(0.30),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(children: [
-                          _ToggleBtn('Line',   0, chartMode, onChartMode),
-                          Container(width: 1, height: 22,
-                              color: _C.border.withOpacity(0.6)),
-                          _ToggleBtn('Candle', 1, chartMode, onChartMode),
-                        ]),
+                        child: Text(stock.sector,
+                            style: const TextStyle(
+                                fontSize: 9, color: _C.textSub)),
                       ),
+                    ]),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: MediaQuery.of(context).size.width - 130,
+                      child: Text(stock.name,
+                          style: const TextStyle(
+                              fontSize: 11.5, fontWeight: FontWeight.w600,
+                              color: _C.textSub, height: 1.2),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Price + change — top right
+              Positioned(top: 12, right: 14,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('E ${stock.price.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w900,
+                            color: _C.textPrim,
+                            letterSpacing: -0.6, height: 1)),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: color.withOpacity(0.35), width: 1),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(
+                            stock.positive
+                                ? Icons.arrow_upward_rounded
+                                : Icons.arrow_downward_rounded,
+                            color: color, size: 11),
+                        const SizedBox(width: 3),
+                        Text(
+                            '${stock.positive ? '+' : ''}${stock.changePercent.abs() < 0.02 ? '0.0' : stock.changePercent.toStringAsFixed(2)}%',
+                            style: TextStyle(fontSize: 10,
+                                fontWeight: FontWeight.w800, color: color)),
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Chart type toggle — bottom left
+              Positioned(bottom: 8, left: 14,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _C.surface.withOpacity(0.75),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: _C.border.withOpacity(0.60), width: 1),
+                      ),
+                      child: Row(children: [
+                        _ToggleBtn('Line',   0, chartMode, onChartMode),
+                        Container(width: 1, height: 22,
+                            color: _C.border.withOpacity(0.6)),
+                        _ToggleBtn('Candle', 1, chartMode, onChartMode),
+                      ]),
                     ),
                   ),
                 ),
+              ),
 
-                // ── 10-Day label — bottom right ───────────────────────
-                Positioned(bottom: 12, right: 14,
-                  child: Text('10-Day',
-                      style: TextStyle(fontSize: 9.5,
-                          color: _C.textMuted.withOpacity(0.70),
-                          letterSpacing: 0.4)),
-                ),
-              ],
-            ),
+              // 10-Day label — bottom right
+              Positioned(bottom: 12, right: 14,
+                child: Text('10-Day',
+                    style: TextStyle(fontSize: 9.5,
+                        color: _C.textMuted.withOpacity(0.70),
+                        letterSpacing: 0.4)),
+              ),
+            ]),
           ),
 
-          // ══════════════════════════════════════════════════════════════
-          //  OHLCV + TRADE ROW
-          // ══════════════════════════════════════════════════════════════
+          // ── OHLCV + Trade row ─────────────────────────────────────
           Container(
             decoration: BoxDecoration(
               color: _C.surface.withOpacity(0.80),
@@ -618,47 +823,42 @@ class _StockCard extends StatelessWidget {
             ),
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
             child: Column(children: [
-              // OHLCV row
               Row(children: [
                 _OhlcCell('OPEN',
-                    'E ${stock.open.toStringAsFixed(2)}', _C.textPrim),
+                    'E ${stock.open.toStringAsFixed(2)}',  _C.textPrim),
                 _OhlcDiv(),
                 _OhlcCell('HIGH',
-                    'E ${stock.high.toStringAsFixed(2)}', _C.teal),
+                    'E ${stock.high.toStringAsFixed(2)}',  _C.teal),
                 _OhlcDiv(),
                 _OhlcCell('LOW',
-                    'E ${stock.low.toStringAsFixed(2)}', _C.red),
+                    'E ${stock.low.toStringAsFixed(2)}',   _C.red),
                 _OhlcDiv(),
                 _OhlcCell('CHANGE',
-                    '${stock.positive ? '+' : ''}E ${stock.change.toStringAsFixed(2)}',
+                    '${stock.positive ? '+' : ''}E ${stock.change.abs().toStringAsFixed(2)}',
                     color),
                 _OhlcDiv(),
-                _OhlcCell('VOL', '${stock.volume}M', _C.textSub),
+                _OhlcCell('VOL',
+                    stock.volume == 0
+                        ? '—'
+                        : '${stock.volume.toStringAsFixed(0)}',
+                    _C.textSub),
               ]),
 
               const SizedBox(height: 8),
 
-              // Full-width Trade button
+              // Trade button
               GestureDetector(
                 onTap: () {},
                 child: Container(
                   height: 44,
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: stock.positive
-                          ? [const Color(0xFF15E20),
-                        const Color(0xFF2E7D2)]
-                          : [const Color(0xF7F0000),
-                        const Color(0xFFC6828)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: color.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                        color: color.withOpacity(0.50), width: 1),
+                        color: color.withOpacity(0.40), width: 1),
                     boxShadow: [BoxShadow(
-                        color: color.withOpacity(0.28),
-                        blurRadius: 16, offset: const Offset(0, 4))],
+                        color: color.withOpacity(0.20),
+                        blurRadius: 14, offset: const Offset(0, 4))],
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -671,10 +871,8 @@ class _StockCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text('Trade ${stock.ticker}',
                           style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: color,
-                              letterSpacing: 0.3)),
+                              fontSize: 13, fontWeight: FontWeight.w800,
+                              color: color, letterSpacing: 0.3)),
                     ],
                   ),
                 ),
@@ -747,11 +945,9 @@ class _FullAreaPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (series.length < 2) return;
 
-    // Background
     canvas.drawRect(Offset.zero & size,
         Paint()..color = const Color(0xFF0B1628));
 
-    // Grid lines
     final gridP = Paint()
       ..color = const Color(0xFF1E2E45).withOpacity(0.45)
       ..strokeWidth = 0.6;
@@ -760,8 +956,6 @@ class _FullAreaPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridP);
     }
 
-    // Points — occupy full height range
-    // Top 28% is reserved for price overlay text; line lives in remaining 72%
     const topReserve = 0.28;
     final pts = <Offset>[
       for (int i = 0; i < series.length; i++)
@@ -772,15 +966,14 @@ class _FullAreaPainter extends CustomPainter {
         ),
     ];
 
-    // Smooth bezier
     final path = Path()..moveTo(pts.first.dx, pts.first.dy);
     for (int i = 0; i < pts.length - 1; i++) {
       final cp1 = Offset((pts[i].dx + pts[i+1].dx) / 2, pts[i].dy);
       final cp2 = Offset((pts[i].dx + pts[i+1].dx) / 2, pts[i+1].dy);
-      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, pts[i+1].dx, pts[i+1].dy);
+      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy,
+          pts[i+1].dx, pts[i+1].dy);
     }
 
-    // Gradient fill under line
     final fillPath = Path.from(path)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
@@ -792,7 +985,6 @@ class _FullAreaPainter extends CustomPainter {
         colors: [color.withOpacity(0.42), color.withOpacity(0.02)],
       ).createShader(Offset.zero & size));
 
-    // Stroke
     canvas.drawPath(path, Paint()
       ..color = color
       ..strokeWidth = 2.4
@@ -800,7 +992,6 @@ class _FullAreaPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round);
 
-    // Dots every ~4 points + last
     for (int i = 0; i < pts.length; i++) {
       if (i % 4 == 0 || i == pts.length - 1) {
         canvas.drawCircle(pts[i], 3.2, Paint()..color = color);
@@ -809,7 +1000,6 @@ class _FullAreaPainter extends CustomPainter {
       }
     }
 
-    // Current price vertical cursor
     canvas.drawLine(
       Offset(pts.last.dx, size.height * topReserve),
       Offset(pts.last.dx, size.height),
@@ -838,11 +1028,9 @@ class _FullCandlePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (candles.isEmpty) return;
 
-    // Background
     canvas.drawRect(Offset.zero & size,
         Paint()..color = const Color(0xFF0B1628));
 
-    // Grid
     final gridP = Paint()
       ..color = const Color(0xFF1E2E45).withOpacity(0.45)
       ..strokeWidth = 0.6;
@@ -851,7 +1039,6 @@ class _FullCandlePainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), gridP);
     }
 
-    // Candles sit in lower 72% (top 28% for overlay text)
     const topReserve = 0.28;
     final chartTop    = size.height * topReserve;
     final chartHeight = size.height * (1 - topReserve) * 0.92;
@@ -873,7 +1060,6 @@ class _FullCandlePainter extends CustomPainter {
       final cx    = gap * i + gap / 2;
       final color = c.bullish ? bullColor : bearColor;
 
-      // Wick
       canvas.drawLine(
         Offset(cx, norm(c.high)), Offset(cx, norm(c.low)),
         Paint()..color = color.withOpacity(0.65)
@@ -881,7 +1067,6 @@ class _FullCandlePainter extends CustomPainter {
           ..style = PaintingStyle.stroke,
       );
 
-      // Body
       final bTop = norm(c.bullish ? c.close : c.open);
       final bBot = norm(c.bullish ? c.open  : c.close);
       final bH   = (bBot - bTop).abs().clamp(2.5, double.infinity);
@@ -891,8 +1076,6 @@ class _FullCandlePainter extends CustomPainter {
         const Radius.circular(3),
       );
       canvas.drawRRect(rr, Paint()..color = color.withOpacity(0.90));
-
-      // Glow on bullish
       if (c.bullish) {
         canvas.drawRRect(rr.inflate(2.5),
             Paint()..color = color.withOpacity(0.12));
@@ -906,9 +1089,8 @@ class _FullCandlePainter extends CustomPainter {
 
 // ─── Glow Orb ─────────────────────────────────────────────────────────────────
 class _Orb extends StatelessWidget {
-  final double size;
+  final double size, opacity;
   final Color color;
-  final double opacity;
   const _Orb(this.size, this.color, this.opacity);
   @override
   Widget build(BuildContext context) => Container(

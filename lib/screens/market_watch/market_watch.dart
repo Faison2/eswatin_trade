@@ -1,7 +1,10 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-// ─── ESE Color Palette (shared) ───────────────────────────────────────────────
+// ─── ESE Color Palette ────────────────────────────────────────────────────────
 class _C {
   static const bg        = Color(0xFF060C1A);
   static const surface   = Color(0xFF0D1728);
@@ -25,7 +28,7 @@ class _Stock {
   final String bid;
   final String ask;
   final String change;
-  final double changePct;   // raw number for colour logic
+  final double changePct;
   final List<double> history; // normalised 0–1 sparkline points
 
   const _Stock({
@@ -44,47 +47,162 @@ class _Stock {
 
   Color get color =>
       isFlat ? _C.grey : (isUp ? _C.teal : _C.red);
-}
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const _stocks = [
-  _Stock(
-    ticker: 'DELTA', name: 'Delta Beverages',
-    last: 'E 0.82', bid: 'E 0.81', ask: 'E 0.83',
-    change: '+2.5%', changePct: 2.5,
-    history: [0.72, 0.68, 0.74, 0.65, 0.60, 0.55, 0.48, 0.40, 0.32, 0.22, 0.18],
-  ),
-  _Stock(
-    ticker: 'ECONET', name: 'Econet Wireless',
-    last: 'E 1.45', bid: 'E 1.44', ask: 'E 1.46',
-    change: '-1.4%', changePct: -1.4,
-    history: [0.22, 0.30, 0.25, 0.38, 0.45, 0.52, 0.58, 0.64, 0.70, 0.76, 0.80],
-  ),
-  _Stock(
-    ticker: 'CBZH', name: 'CBZ Holdings',
-    last: 'E 0.34', bid: 'E 0.33', ask: 'E 0.35',
-    change: '+0.9%', changePct: 0.9,
-    history: [0.65, 0.60, 0.66, 0.58, 0.55, 0.50, 0.46, 0.42, 0.38, 0.32, 0.28],
-  ),
-  _Stock(
-    ticker: 'HIPPO', name: 'Hippo Valley',
-    last: 'E 2.10', bid: 'E 2.08', ask: 'E 2.12',
-    change: '+3.9%', changePct: 3.9,
-    history: [0.78, 0.70, 0.75, 0.65, 0.58, 0.50, 0.42, 0.34, 0.25, 0.16, 0.10],
-  ),
-  _Stock(
-    ticker: 'NMBZ', name: 'NMB Holdings',
-    last: 'E 0.51', bid: 'E 0.50', ask: 'E 0.52',
-    change: '-0.6%', changePct: -0.6,
-    history: [0.28, 0.35, 0.30, 0.40, 0.46, 0.50, 0.56, 0.62, 0.66, 0.72, 0.78],
-  ),
-  _Stock(
-    ticker: 'SIMBISA', name: 'Simbisa Brands',
-    last: 'E 0.57', bid: 'E 0.56', ask: 'E 0.58',
-    change: '0.0%', changePct: 0.0,
-    history: [0.48, 0.52, 0.47, 0.51, 0.49, 0.50, 0.51, 0.48, 0.50, 0.49, 0.50],
-  ),
-];
+  // ── Build a _Stock from the API JSON map ────────────────────────────────
+  factory _Stock.fromJson(Map<String, dynamic> json) {
+    final double lastPrice    = (json['lastPrice']    as num? ?? 0).toDouble();
+    final double openingPrice = (json['openingPrice'] as num? ?? 0).toDouble();
+    final double closingPrice = (json['closingPrice'] as num? ?? 0).toDouble();
+    final double highestPrice = (json['highestPrice'] as num? ?? lastPrice).toDouble();
+    final double lowestPrice  = (json['lowestPrice']  as num? ?? lastPrice).toDouble();
+    final double bidPrice     = (json['bid']          as num? ?? 0).toDouble();
+    final double offerPrice   = (json['offer']        as num? ?? 0).toDouble();
+    final double changePct    = (json['changePercent']as num? ?? 0).toDouble();
+    final double changeVal    = (json['changeValue']  as num? ?? 0).toDouble();
+    final String trend        = (json['trend']        as String? ?? 'FLAT').toUpperCase();
+
+    // Derive ticker: last 6 chars of company code, or abbreviate fullname
+    final String companyCode = json['company'] as String? ?? '';
+    final String fullname    = json['fullname'] as String? ?? companyCode;
+    final String ticker      = _deriveTicker(companyCode, fullname);
+
+    // Format prices
+    String fmt(double v) =>
+        v == 0 ? '—' : 'E ${v.toStringAsFixed(2)}';
+
+    // Change label
+    String changeLabel;
+    if (changePct == 0 && changeVal == 0) {
+      changeLabel = '0.0%';
+    } else if (changePct != 0) {
+      changeLabel =
+      '${changePct > 0 ? '+' : ''}${changePct.toStringAsFixed(1)}%';
+    } else {
+      changeLabel =
+      '${changeVal > 0 ? '+' : ''}E ${changeVal.toStringAsFixed(2)}';
+    }
+
+    // Override with trend string when both numbers are 0
+    if (changePct == 0 && changeVal == 0 && trend == 'UP') {
+      changeLabel = '+0.0%';
+    } else if (changePct == 0 && changeVal == 0 && trend == 'DOWN') {
+      changeLabel = '-0.0%';
+    }
+
+    // Effective change percent for colour logic
+    double effectivePct = changePct;
+    if (effectivePct == 0) {
+      if (trend == 'UP')   effectivePct = 0.01;
+      if (trend == 'DOWN') effectivePct = -0.01;
+    }
+
+    // ── Generate sparkline from available price points ───────────────────
+    // We have: openingPrice, closingPrice, highestPrice, lowestPrice, lastPrice
+    // Build a plausible 11-point normalised curve
+    final history = _buildSparkline(
+      open:    openingPrice,
+      close:   closingPrice,
+      high:    highestPrice,
+      low:     lowestPrice,
+      last:    lastPrice,
+      trend:   trend,
+    );
+
+    return _Stock(
+      ticker:    ticker,
+      name:      fullname,
+      last:      fmt(lastPrice),
+      bid:       bidPrice  == 0 ? '—' : fmt(bidPrice),
+      ask:       offerPrice == 0 ? '—' : fmt(offerPrice),
+      change:    changeLabel,
+      changePct: effectivePct,
+      history:   history,
+    );
+  }
+
+  // ── Derive a short ticker from company code or name ──────────────────────
+  static String _deriveTicker(String code, String fullname) {
+    // ESE company codes often end in meaningful letters after the number part
+    // e.g. "SZE000331023" → try last alpha chars, else abbreviate name
+    final letters = code.replaceAll(RegExp(r'[^A-Za-z]'), '');
+    if (letters.length >= 2 && letters.length <= 6) {
+      return letters.toUpperCase();
+    }
+    // Abbreviate fullname: take first letter of each word (max 5)
+    final words = fullname.trim().split(RegExp(r'\s+'));
+    if (words.length == 1) {
+      return words.first.substring(0, math.min(5, words.first.length))
+          .toUpperCase();
+    }
+    return words
+        .take(5)
+        .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
+        .join();
+  }
+
+  // ── Build a normalised 11-point sparkline ─────────────────────────────────
+  static List<double> _buildSparkline({
+    required double open,
+    required double close,
+    required double high,
+    required double low,
+    required double last,
+    required String trend,
+  }) {
+    // All prices we know about
+    final allPrices = [open, close, high, low, last]
+        .where((p) => p > 0)
+        .toList();
+    if (allPrices.isEmpty) return List.filled(11, 0.5);
+
+    final minP = allPrices.reduce(math.min);
+    final maxP = allPrices.reduce(math.max);
+    final range = (maxP - minP).abs();
+
+    // Normalise a price to 0–1 (inverted: high value = low y on canvas
+    // since y=0 is top). We want high price = top of chart so invert.
+    double norm(double v) {
+      if (range == 0) return 0.5;
+      return 1.0 - ((v - minP) / range).clamp(0.0, 1.0);
+    }
+
+    // Build 11-point path: open → interpolated → high/low peak → close → last
+    final rng = math.Random(open.toInt() + last.toInt());
+
+    // Decide if upward or downward overall
+    final goingUp = trend == 'UP' || last >= open;
+
+    List<double> pts = [];
+
+    // Point 0: open
+    pts.add(norm(open));
+
+    // Points 1-4: interpolation with noise
+    for (int i = 1; i <= 4; i++) {
+      final t = i / 10.0;
+      final base = open + (last - open) * t;
+      // Add some wiggle: up trend wiggles up, down trend wiggles down
+      final wiggle = range * 0.15 * (rng.nextDouble() - (goingUp ? 0.3 : 0.7));
+      pts.add(norm((base + wiggle).clamp(minP, maxP)));
+    }
+
+    // Point 5: high or low depending on trend (midpoint peak/trough)
+    pts.add(goingUp ? norm(high) : norm(low));
+
+    // Points 6-9: interpolation with noise back toward close
+    for (int i = 6; i <= 9; i++) {
+      final t = (i - 5) / 5.0;
+      final base = (goingUp ? high : low) + (close - (goingUp ? high : low)) * t;
+      final wiggle = range * 0.10 * (rng.nextDouble() - 0.5);
+      pts.add(norm((base + wiggle).clamp(minP, maxP)));
+    }
+
+    // Point 10: last price
+    pts.add(norm(last));
+
+    return pts;
+  }
+}
 
 // ─── Market Watch Widget ──────────────────────────────────────────────────────
 class MarketWatch extends StatefulWidget {
@@ -97,7 +215,11 @@ class MarketWatch extends StatefulWidget {
 class _MarketWatchState extends State<MarketWatch>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
-  late List<Animation<double>> _cardAnims;
+  List<Animation<double>> _cardAnims = [];
+
+  List<_Stock> _stocks  = [];
+  bool  _loading        = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -105,17 +227,205 @@ class _MarketWatchState extends State<MarketWatch>
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
-    )..forward();
+    );
+    _fetchMarketData();
+  }
 
-    _cardAnims = List.generate(_stocks.length, (i) {
-      final start = i * 0.10;
-      final end   = start + 0.55;
-      return CurvedAnimation(
-        parent: _ctrl,
-        curve: Interval(start.clamp(0, 1), end.clamp(0, 1),
-            curve: Curves.easeOutCubic),
-      );
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  // ── Fetch from API ──────────────────────────────────────────────────────
+  Future<void> _fetchMarketData() async {
+    setState(() {
+      _loading      = true;
+      _errorMessage = null;
     });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('session_token') ?? '';
+
+      final response = await http
+          .get(
+        Uri.parse('https://app.trading-ese.com/eseapi/Home/MarketWatch'),
+        headers: {
+          'Content-Type':  'application/json',
+          'Accept':        'application/json',
+          'Authorization': 'Bearer $token',
+          'sessionToken':  token,
+        },
+      )
+          .timeout(const Duration(seconds: 20));
+
+      if (!mounted) return;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 &&
+          (data['responseCode'] == 200 || data['securities'] != null)) {
+        final rawList = data['securities'] as List<dynamic>? ?? [];
+        final stocks  = rawList
+            .map((s) => _Stock.fromJson(s as Map<String, dynamic>))
+            .take(4)
+            .toList();
+
+        // Build staggered animations
+        _ctrl.reset();
+        _cardAnims = List.generate(stocks.length, (i) {
+          final start = (i * 0.08).clamp(0.0, 1.0);
+          final end   = (start + 0.55).clamp(0.0, 1.0);
+          return CurvedAnimation(
+            parent: _ctrl,
+            curve: Interval(start, end, curve: Curves.easeOutCubic),
+          );
+        });
+
+        setState(() {
+          _stocks  = stocks;
+          _loading = false;
+        });
+
+        _ctrl.forward();
+      } else {
+        setState(() {
+          _errorMessage = data['responseMessage'] as String? ??
+              'Failed to load market data.';
+          _loading = false;
+        });
+      }
+    } on http.ClientException catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Network error: ${e.message}';
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Unable to load market data.';
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Section Header ────────────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(children: [
+                Container(
+                  width: 3, height: 16,
+                  decoration: BoxDecoration(
+                    color: _C.teal,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text('Market Watch — ESE Live',
+                    style: TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.w800,
+                        color: _C.textPrim, letterSpacing: 0.2)),
+              ]),
+              Row(children: [
+                // Refresh button
+                GestureDetector(
+                  onTap: _fetchMarketData,
+                  child: Container(
+                    width: 30, height: 30,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: _C.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: _C.border),
+                    ),
+                    child: const Icon(Icons.refresh_rounded,
+                        color: _C.textSub, size: 15),
+                  ),
+                ),
+                _LiveBadge(),
+              ]),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // ── States ────────────────────────────────────────────────────
+          if (_loading)
+            _LoadingState()
+          else if (_errorMessage != null)
+            _ErrorState(
+              message: _errorMessage!,
+              onRetry: _fetchMarketData,
+            )
+          else
+          // ── Cards ─────────────────────────────────────────────────
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _stocks.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (_, i) {
+                if (i >= _cardAnims.length) {
+                  return _StockCard(stock: _stocks[i]);
+                }
+                return FadeTransition(
+                  opacity: _cardAnims[i],
+                  child: SlideTransition(
+                    position: Tween(
+                      begin: const Offset(0, 0.18),
+                      end: Offset.zero,
+                    ).animate(_cardAnims[i]),
+                    child: _StockCard(stock: _stocks[i]),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Loading State ────────────────────────────────────────────────────────────
+class _LoadingState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(4, (_) => _SkeletonCard()),
+    );
+  }
+}
+
+class _SkeletonCard extends StatefulWidget {
+  @override
+  State<_SkeletonCard> createState() => _SkeletonCardState();
+}
+
+class _SkeletonCardState extends State<_SkeletonCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _shimmer;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat();
+    _shimmer = Tween(begin: -1.5, end: 2.5)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -126,79 +436,74 @@ class _MarketWatchState extends State<MarketWatch>
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Section Header ──
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 3, height: 16,
-                    decoration: BoxDecoration(
-                      color: _C.teal,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('Market Watch — ESE Live',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: _C.textPrim,
-                        letterSpacing: 0.2,
-                      )),
-                ],
-              ),
-              _LiveBadge(),
+    return AnimatedBuilder(
+      animation: _shimmer,
+      builder: (_, __) => Container(
+        height: 82,
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          gradient: LinearGradient(
+            colors: [
+              _C.card,
+              _C.surface,
+              _C.card,
             ],
-          ),
-
-          const SizedBox(height: 6),
-
-          // ── Legend ──
-          Row(
-            children: const [
-              _LegendDot(color: _C.teal,  label: 'Gaining'),
-              SizedBox(width: 14),
-              _LegendDot(color: _C.red,   label: 'Losing'),
-              SizedBox(width: 14),
-              _LegendDot(color: _C.grey, label: 'No Change'),
+            stops: [
+              (_shimmer.value - 1).clamp(0.0, 1.0),
+              _shimmer.value.clamp(0.0, 1.0),
+              (_shimmer.value + 1).clamp(0.0, 1.0),
             ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-
-          const SizedBox(height: 14),
-
-          // ── Cards Grid ──
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 1,
-              crossAxisSpacing: 0,
-              mainAxisSpacing: 10,
-              childAspectRatio: 3.8,
-            ),
-            itemCount: _stocks.length,
-            itemBuilder: (_, i) {
-              return FadeTransition(
-                opacity: _cardAnims[i],
-                child: SlideTransition(
-                  position: Tween(
-                    begin: const Offset(0, 0.18),
-                    end: Offset.zero,
-                  ).animate(_cardAnims[i]),
-                  child: _StockCard(stock: _stocks[i]),
-                ),
-              );
-            },
-          ),
-        ],
+          border: Border.all(color: _C.border, width: 1),
+        ),
       ),
+    );
+  }
+}
+
+// ─── Error State ──────────────────────────────────────────────────────────────
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _C.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _C.red.withOpacity(0.25), width: 1),
+      ),
+      child: Column(children: [
+        Icon(Icons.wifi_off_rounded,
+            color: _C.red.withOpacity(0.70), size: 32),
+        const SizedBox(height: 10),
+        Text(message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 12.5, color: _C.textSub)),
+        const SizedBox(height: 14),
+        GestureDetector(
+          onTap: onRetry,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+            decoration: BoxDecoration(
+              color: _C.gold.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _C.gold.withOpacity(0.28), width: 1),
+            ),
+            child: const Text('Retry',
+                style: TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w700,
+                    color: _C.gold)),
+          ),
+        ),
+      ]),
     );
   }
 }
@@ -217,16 +522,12 @@ class _LiveBadgeState extends State<_LiveBadge>
   void initState() {
     super.initState();
     _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
+        vsync: this, duration: const Duration(milliseconds: 1000))
+      ..repeat(reverse: true);
   }
 
   @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
+  void dispose() { _pulse.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -252,8 +553,8 @@ class _LiveBadgeState extends State<_LiveBadge>
           ),
           const SizedBox(width: 5),
           const Text('Market Open',
-              style: TextStyle(
-                  fontSize: 9.5, fontWeight: FontWeight.w700, color: _C.teal)),
+              style: TextStyle(fontSize: 9.5,
+                  fontWeight: FontWeight.w700, color: _C.teal)),
         ],
       ),
     );
@@ -277,8 +578,9 @@ class _LegendDot extends StatelessWidget {
         ),
         const SizedBox(width: 5),
         Text(label,
-            style: TextStyle(
-                fontSize: 9.5, color: _C.textSub, fontWeight: FontWeight.w500)),
+            style: const TextStyle(
+                fontSize: 9.5, color: _C.textSub,
+                fontWeight: FontWeight.w500)),
       ],
     );
   }
@@ -296,25 +598,21 @@ class _StockCard extends StatefulWidget {
 class _StockCardState extends State<_StockCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _chartCtrl;
-  late Animation<double> _chartProgress;
+  late Animation<double>   _chartProgress;
   bool _pressed = false;
 
   @override
   void initState() {
     super.initState();
     _chartCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..forward();
+        vsync: this, duration: const Duration(milliseconds: 1200))
+      ..forward();
     _chartProgress = CurvedAnimation(
         parent: _chartCtrl, curve: Curves.easeOutCubic);
   }
 
   @override
-  void dispose() {
-    _chartCtrl.dispose();
-    super.dispose();
-  }
+  void dispose() { _chartCtrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
@@ -322,109 +620,118 @@ class _StockCardState extends State<_StockCard>
     final c = s.color;
 
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp:   (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
+      onTapDown:   (_) => setState(() => _pressed = true),
+      onTapUp:     (_) => setState(() => _pressed = false),
+      onTapCancel: ()  => setState(() => _pressed = false),
       child: AnimatedScale(
-        scale: _pressed ? 0.96 : 1.0,
+        scale: _pressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 100),
         child: Container(
+          height: 96,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            gradient: LinearGradient(
-              colors: [
-                _C.card,
-                Color.lerp(_C.card, c, 0.06)!,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(color: c.withOpacity(0.22), width: 1),
+            borderRadius: BorderRadius.circular(20),
+            color: _C.card,
+            border: Border.all(color: c.withOpacity(0.20), width: 1),
             boxShadow: [
-              BoxShadow(
-                color: c.withOpacity(0.12),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
+              BoxShadow(color: c.withOpacity(0.10),
+                  blurRadius: 18, offset: const Offset(0, 4)),
+              BoxShadow(color: Colors.black.withOpacity(0.28),
+                  blurRadius: 10, offset: const Offset(0, 2)),
             ],
           ),
-          child: Stack(
+          child: Row(
             children: [
-              // ── Background area chart fill ──
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
+              // ── Left colour accent bar ───────────────────────────────
+              Container(
+                width: 3,
+                margin: const EdgeInsets.symmetric(vertical: 16),
+                decoration: BoxDecoration(
+                  color: c,
+                  borderRadius: const BorderRadius.only(
+                    topRight:    Radius.circular(4),
+                    bottomRight: Radius.circular(4),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              // ── Ticker + name + bid/ask ──────────────────────────────
+              Expanded(
+                flex: 10,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(s.ticker,
+                        style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w900,
+                            color: _C.textPrim,
+                            letterSpacing: 0.4)),
+                    const SizedBox(height: 2),
+                    Text(s.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 8.5,
+                            color: _C.textSub.withOpacity(0.75))),
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      _MicroLabel(label: 'B', value: s.bid, color: _C.teal),
+                      const SizedBox(width: 10),
+                      _MicroLabel(label: 'A', value: s.ask, color: _C.red),
+                    ]),
+                  ],
+                ),
+              ),
+
+              // ── Sparkline ────────────────────────────────────────────
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: 88,
+                  height: 52,
+                  margin: const EdgeInsets.symmetric(vertical: 22),
+                  decoration: BoxDecoration(
+                    color: c.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: c.withOpacity(0.14), width: 1),
+                  ),
                   child: AnimatedBuilder(
                     animation: _chartProgress,
                     builder: (_, __) => CustomPaint(
-                      painter: _AreaChartPainter(
-                        data: s.history,
-                        color: c,
+                      painter: _SparklinePainter(
+                        data:     s.history,
+                        color:    c,
                         progress: _chartProgress.value,
-                        showFill: true,
                       ),
                     ),
                   ),
                 ),
               ),
 
-              // ── Content ──
-              Padding(
-                padding: const EdgeInsets.fromLTRB(11, 10, 11, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Top row: ticker + badge
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(s.ticker,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w900,
-                                color: _C.textPrim,
-                                letterSpacing: 0.3)),
-                        _ChangeBadge(change: s.change, color: c,
-                            isFlat: s.isFlat, isUp: s.isUp),
-                      ],
-                    ),
+              const SizedBox(width: 12),
 
-                    // Company name
-                    Text(s.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 8.5,
-                            color: _C.textSub.withOpacity(0.8))),
-
-                    const Spacer(),
-
-                    // Price + bid/ask
-                    Text(s.last,
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: c,
-                            letterSpacing: -0.3)),
-
-                    Row(
-                      children: [
-                        _MicroLabel(label: 'B', value: s.bid,
-                            color: _C.teal),
-                        const SizedBox(width: 8),
-                        _MicroLabel(label: 'A', value: s.ask,
-                            color: _C.red),
-                      ],
-                    ),
-                  ],
-                ),
+              // ── Price + change badge ─────────────────────────────────
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(s.last,
+                      style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w900,
+                          color: c,
+                          letterSpacing: -0.4)),
+                  const SizedBox(height: 5),
+                  _ChangeBadge(
+                      change: s.change, color: c,
+                      isFlat: s.isFlat, isUp: s.isUp),
+                ],
               ),
+
+              const SizedBox(width: 14),
             ],
           ),
         ),
@@ -436,18 +743,18 @@ class _StockCardState extends State<_StockCard>
 // ─── Change Badge ─────────────────────────────────────────────────────────────
 class _ChangeBadge extends StatelessWidget {
   final String change;
-  final Color color;
-  final bool isFlat, isUp;
-  const _ChangeBadge(
-      {required this.change, required this.color,
-        required this.isFlat, required this.isUp});
+  final Color  color;
+  final bool   isFlat, isUp;
+  const _ChangeBadge({
+    required this.change, required this.color,
+    required this.isFlat, required this.isUp,
+  });
 
   @override
   Widget build(BuildContext context) {
-    IconData icon = isFlat
+    final IconData icon = isFlat
         ? Icons.drag_handle_rounded
         : (isUp ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded);
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
@@ -461,9 +768,7 @@ class _ChangeBadge extends StatelessWidget {
           Icon(icon, color: color, size: 11),
           const SizedBox(width: 1),
           Text(change,
-              style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w800,
+              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
                   color: color)),
         ],
       ),
@@ -474,7 +779,7 @@ class _ChangeBadge extends StatelessWidget {
 // ─── Micro Bid/Ask Label ──────────────────────────────────────────────────────
 class _MicroLabel extends StatelessWidget {
   final String label, value;
-  final Color color;
+  final Color  color;
   const _MicroLabel(
       {required this.label, required this.value, required this.color});
 
@@ -484,110 +789,95 @@ class _MicroLabel extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text('$label ',
-            style: TextStyle(
-                fontSize: 8,
-                fontWeight: FontWeight.w800,
+            style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800,
                 color: color.withOpacity(0.7))),
         Text(value,
-            style: TextStyle(
-                fontSize: 8.5,
-                fontWeight: FontWeight.w600,
+            style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.w600,
                 color: _C.textSub)),
       ],
     );
   }
 }
 
-// ─── Area Chart Painter ───────────────────────────────────────────────────────
-class _AreaChartPainter extends CustomPainter {
+// ─── Sparkline Painter ────────────────────────────────────────────────────────
+class _SparklinePainter extends CustomPainter {
   final List<double> data;
-  final Color color;
+  final Color  color;
   final double progress;
-  final bool showFill;
 
-  const _AreaChartPainter({
+  const _SparklinePainter({
     required this.data,
     required this.color,
     required this.progress,
-    required this.showFill,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     if (data.isEmpty) return;
 
+    final totalPts     = data.length;
+    final visibleCount =
+    (totalPts * progress).clamp(1, totalPts.toDouble()).round();
+
     final pts = <Offset>[];
-    final totalPts = data.length;
-
-    // Only draw up to `progress` fraction of the line
-    final visibleCount = (totalPts * progress).clamp(1, totalPts.toDouble()).round();
-
     for (int i = 0; i < visibleCount; i++) {
+      // data is 0–1 where 1 = high price = top of chart, so invert y
       final x = (i / (totalPts - 1)) * size.width;
-      final y = data[i] * size.height;
+      final y = (1.0 - data[i]) * size.height;
       pts.add(Offset(x, y));
     }
-
     if (pts.length < 2) return;
 
-    // ── Smooth bezier path ──
-    final linePath = Path();
-    linePath.moveTo(pts.first.dx, pts.first.dy);
+    // ── Smooth bezier path ────────────────────────────────────────────
+    final path = Path()..moveTo(pts.first.dx, pts.first.dy);
     for (int i = 0; i < pts.length - 1; i++) {
-      final p0 = pts[i];
-      final p1 = pts[i + 1];
-      final cpX = (p0.dx + p1.dx) / 2;
-      linePath.cubicTo(cpX, p0.dy, cpX, p1.dy, p1.dx, p1.dy);
+      final cpX = (pts[i].dx + pts[i + 1].dx) / 2;
+      path.cubicTo(
+          cpX, pts[i].dy,
+          cpX, pts[i + 1].dy,
+          pts[i + 1].dx, pts[i + 1].dy);
     }
 
-    // ── Fill area ──
-    if (showFill) {
-      final fillPath = Path.from(linePath)
-        ..lineTo(pts.last.dx, size.height)
-        ..lineTo(0, size.height)
-        ..close();
+    // ── Gradient fill under the line ──────────────────────────────────
+    final fillPath = Path.from(path)
+      ..lineTo(pts.last.dx, size.height)
+      ..lineTo(0, size.height)
+      ..close();
 
-      canvas.drawPath(
-        fillPath,
-        Paint()
-          ..shader = LinearGradient(
-            colors: [
-              color.withOpacity(0.18),
-              color.withOpacity(0.0),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
-      );
-    }
-
-    // ── Line stroke ──
     canvas.drawPath(
-      linePath,
+      fillPath,
       Paint()
-        ..color = color.withOpacity(0.65)
-        ..strokeWidth = 1.8
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
+        ..shader = LinearGradient(
+          colors: [
+            color.withOpacity(0.32),
+            color.withOpacity(0.0),
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
     );
 
-    // ── End dot ──
-    if (pts.isNotEmpty) {
-      canvas.drawCircle(
-        pts.last,
-        3.0,
-        Paint()..color = color.withOpacity(0.9),
-      );
-      canvas.drawCircle(
-        pts.last,
-        5.5,
-        Paint()..color = color.withOpacity(0.20),
-      );
-    }
+    // ── Line stroke ───────────────────────────────────────────────────
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color       = color
+        ..strokeWidth = 1.8
+        ..style       = PaintingStyle.stroke
+        ..strokeCap   = StrokeCap.round
+        ..strokeJoin  = StrokeJoin.round,
+    );
+
+    // ── End dot: glow ring + filled dot + white centre ────────────────
+    canvas.drawCircle(pts.last, 6.5,
+        Paint()..color = color.withOpacity(0.15));
+    canvas.drawCircle(pts.last, 3.2,
+        Paint()..color = color);
+    canvas.drawCircle(pts.last, 1.4,
+        Paint()..color = Colors.white.withOpacity(0.90));
   }
 
   @override
-  bool shouldRepaint(_AreaChartPainter old) =>
+  bool shouldRepaint(_SparklinePainter old) =>
       old.progress != progress || old.color != color;
 }

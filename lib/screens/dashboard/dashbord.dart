@@ -314,8 +314,6 @@ class _TopBar extends StatelessWidget {
                           fontSize: 13.5, fontWeight: FontWeight.w700,
                           color: _C.textPrim),
                     ),
-                    const SizedBox(width: 4),
-                    const Text('👋', style: TextStyle(fontSize: 12)),
                   ],
                 ),
                 const SizedBox(height: 3),

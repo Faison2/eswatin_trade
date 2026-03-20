@@ -2,9 +2,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../settings /settings.dart';
 
-// ─── Color Palette ────────────────────────────────────────────────────────────
-class _C {
+// ─── Dark tokens ──────────────────────────────────────────────────────────────
+class _Dark {
   static const bg       = Color(0xFF060C1A);
   static const surface  = Color(0xFF0D1728);
   static const card     = Color(0xFF0F1D32);
@@ -16,10 +17,32 @@ class _C {
   static const textPrim = Color(0xFFEEF2FF);
   static const textSub  = Color(0xFF5A7090);
   static const textDim  = Color(0xFF2A3F58);
+  static const avatarBg1 = Color(0xFF0D1A33);
+  static const avatarBg2 = Color(0xFF142444);
 }
 
+// ─── Light tokens ─────────────────────────────────────────────────────────────
+class _Light {
+  static const bg       = Color(0xFFF0F4FB);
+  static const surface  = Color(0xFFFFFFFF);
+  static const card     = Color(0xFFFFFFFF);
+  static const border   = Color(0xFFDDE3EF);
+  static const gold     = Color(0xFFC49020);
+  static const goldSoft = Color(0xFF8B6010);
+  static const blue     = Color(0xFF1565C0);
+  static const red      = Color(0xFFD43F3C);
+  static const textPrim = Color(0xFF0D1728);
+  static const textSub  = Color(0xFF64748B);
+  static const textDim  = Color(0xFFADB5C7);
+  static const avatarBg1 = Color(0xFFFFF8EE);
+  static const avatarBg2 = Color(0xFFFFF3DC);
+}
+
+// ─── Profile Screen ───────────────────────────────────────────────────────────
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final AppThemeNotifier themeNotifier;
+  const ProfileScreen({super.key, required this.themeNotifier});
+
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
@@ -30,7 +53,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   late Animation<double>   _fade;
   late Animation<Offset>   _slide;
 
-  // ── SharedPreferences data ────────────────────────────────────────────────
   String _fullName  = '';
   String _forenames = '';
   String _surname   = '';
@@ -40,6 +62,21 @@ class _ProfileScreenState extends State<ProfileScreen>
   String _initials  = '';
   bool   _loading   = true;
 
+  // ── Theme helpers ────────────────────────────────────────────────────────
+  bool   get _isLight  => widget.themeNotifier.isLight;
+  Color  get _bg       => _isLight ? _Light.bg       : _Dark.bg;
+  Color  get _surface  => _isLight ? _Light.surface  : _Dark.surface;
+  Color  get _card     => _isLight ? _Light.card     : _Dark.card;
+  Color  get _border   => _isLight ? _Light.border   : _Dark.border;
+  Color  get _gold     => _isLight ? _Light.gold     : _Dark.gold;
+  Color  get _goldSoft => _isLight ? _Light.goldSoft : _Dark.goldSoft;
+  Color  get _red      => _isLight ? _Light.red      : _Dark.red;
+  Color  get _textPrim => _isLight ? _Light.textPrim : _Dark.textPrim;
+  Color  get _textSub  => _isLight ? _Light.textSub  : _Dark.textSub;
+  Color  get _textDim  => _isLight ? _Light.textDim  : _Dark.textDim;
+
+  void _rebuild() => setState(() {});
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +85,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     _fade  = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
     _slide = Tween(begin: const Offset(0, 0.04), end: Offset.zero)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
+    widget.themeNotifier.addListener(_rebuild);
     _load();
   }
 
@@ -61,8 +99,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       _phone     = p.getString('phone_number') ?? '—';
       _cdsNumber = p.getString('cds_number')   ?? '—';
       _initials  = '${_forenames.isNotEmpty ? _forenames[0] : ''}'
-          '${_surname.isNotEmpty   ? _surname[0]   : ''}'
-          .toUpperCase();
+          '${_surname.isNotEmpty ? _surname[0] : ''}'.toUpperCase();
       if (_initials.isEmpty) _initials = 'U';
       _loading = false;
     });
@@ -70,12 +107,24 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
+  void dispose() {
+    _ctrl.dispose();
+    widget.themeNotifier.removeListener(_rebuild);
+    super.dispose();
+  }
 
   Future<void> _signOut() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => _SignOutDialog(),
+      builder: (_) => _SignOutDialog(
+        isLight:  _isLight,
+        card:     _card,
+        surface:  _surface,
+        border:   _border,
+        red:      _red,
+        textPrim: _textPrim,
+        textSub:  _textSub,
+      ),
     );
     if (confirmed == true && mounted) {
       final p = await SharedPreferences.getInstance();
@@ -88,88 +137,127 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: _isLight ? Brightness.dark : Brightness.light,
     ));
 
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: _C.bg,
-        body: Center(
-          child: CircularProgressIndicator(color: _C.gold, strokeWidth: 2),
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        color: _bg,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(
+            child: CircularProgressIndicator(color: _gold, strokeWidth: 2),
+          ),
         ),
       );
     }
 
-    return Scaffold(
-      backgroundColor: _C.bg,
-      extendBodyBehindAppBar: true,
-      appBar: _AppBar(onBack: () => Navigator.pop(context)),
-      body: Stack(children: [
-        Positioned(top: -60, right: -80,
-            child: _Orb(size: 280, color: _C.gold, opacity: 0.055)),
-        Positioned(top: 260, left: -100,
-            child: _Orb(size: 220, color: _C.blue, opacity: 0.065)),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      color: _bg,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        appBar: _AppBar(
+          onBack:   () => Navigator.pop(context),
+          isLight:  _isLight,
+          bg:       _bg,
+          surface:  _surface,
+          border:   _border,
+          textPrim: _textPrim,
+          textSub:  _textSub,
+        ),
+        body: Stack(children: [
+          // Ambient orbs
+          Positioned(top: -60, right: -80,
+              child: _Orb(size: 280,
+                  color: _gold,
+                  opacity: _isLight ? 0.04 : 0.055)),
+          Positioned(top: 260, left: -100,
+              child: _Orb(size: 220,
+                  color: _isLight ? _Light.blue : _Dark.blue,
+                  opacity: _isLight ? 0.04 : 0.065)),
 
-        FadeTransition(
-          opacity: _fade,
-          child: SlideTransition(
-            position: _slide,
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.only(
-                top: MediaQuery.of(context).padding.top + kToolbarHeight + 12,
-                bottom: 48,
-              ),
-              child: Column(children: [
-
-                // ── Hero avatar card ──────────────────────────────────
-                _HeroCard(
-                    initials: _initials,
-                    fullName: _fullName,
-                    email:    _email),
-
-                const SizedBox(height: 28),
-
-                // ── Section label ─────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-                  child: Row(children: [
-                    const Text('ACCOUNT DETAILS',
-                        style: TextStyle(
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.w700,
-                            color: _C.textSub,
-                            letterSpacing: 1.8)),
-                    const SizedBox(width: 12),
-                    Expanded(child: Container(height: 1, color: _C.border)),
-                  ]),
+          FadeTransition(
+            opacity: _fade,
+            child: SlideTransition(
+              position: _slide,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.only(
+                  top: MediaQuery.of(context).padding.top +
+                      kToolbarHeight + 12,
+                  bottom: 48,
                 ),
+                child: Column(children: [
 
-                // ── Details card ──────────────────────────────────────
-                _DetailsCard(fields: [
-                  _Field(Icons.person_rounded,      'First Name',  _forenames),
-                  _Field(Icons.person_outline,      'Surname',     _surname),
-                  _Field(Icons.email_outlined,      'Email',       _email),
-                  _Field(Icons.phone_outlined,      'Phone',       _phone),
-                  _Field(Icons.credit_card_rounded, 'CDS Number',  _cdsNumber),
+                  // ── Hero avatar card ──────────────────────────────
+                  _HeroCard(
+                    initials:  _initials,
+                    fullName:  _fullName,
+                    email:     _email,
+                    isLight:   _isLight,
+                    card:      _card,
+                    surface:   _surface,
+                    border:    _border,
+                    gold:      _gold,
+                    goldSoft:  _goldSoft,
+                    textPrim:  _textPrim,
+                    textSub:   _textSub,
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // ── Section label ─────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                    child: Row(children: [
+                      Text('ACCOUNT DETAILS',
+                          style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              color: _textSub,
+                              letterSpacing: 1.8)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Container(height: 1, color: _border)),
+                    ]),
+                  ),
+
+                  // ── Details card ──────────────────────────────────
+                  _DetailsCard(
+                    fields: [
+                      _Field(Icons.person_rounded,      'First Name',  _forenames),
+                      _Field(Icons.person_outline,      'Surname',     _surname),
+                      _Field(Icons.email_outlined,      'Email',       _email),
+                      _Field(Icons.phone_outlined,      'Phone',       _phone),
+                      _Field(Icons.credit_card_rounded, 'CDS Number',  _cdsNumber),
+                    ],
+                    isLight:  _isLight,
+                    card:     _card,
+                    border:   _border,
+                    gold:     _gold,
+                    textPrim: _textPrim,
+                    textSub:  _textSub,
+                  ),
+
+                  const SizedBox(height: 36),
+
+                  _SignOutBtn(onTap: _signOut, red: _red),
+
+                  const SizedBox(height: 16),
+                  Text('© 2025 Eswatini Stock Exchange',
+                      style: TextStyle(fontSize: 9.5,
+                          color: _textDim, letterSpacing: 0.4)),
+                  const SizedBox(height: 8),
                 ]),
-
-                const SizedBox(height: 36),
-
-                _SignOutBtn(onTap: _signOut),
-
-                const SizedBox(height: 16),
-                Text('© 2025 Eswatini Stock Exchange',
-                    style: TextStyle(fontSize: 9.5,
-                        color: _C.textDim, letterSpacing: 0.4)),
-                const SizedBox(height: 8),
-              ]),
+              ),
             ),
           ),
-        ),
-      ]),
+        ]),
+      ),
     );
   }
 }
@@ -177,8 +265,17 @@ class _ProfileScreenState extends State<ProfileScreen>
 // ─── App Bar ──────────────────────────────────────────────────────────────────
 class _AppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onBack;
-  const _AppBar({required this.onBack});
-  @override Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+  final bool  isLight;
+  final Color bg, surface, border, textPrim, textSub;
+
+  const _AppBar({
+    required this.onBack, required this.isLight,
+    required this.bg, required this.surface, required this.border,
+    required this.textPrim, required this.textSub,
+  });
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 
   @override
   Widget build(BuildContext context) {
@@ -186,7 +283,11 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: Container(
-          color: _C.bg.withOpacity(0.55),
+          decoration: BoxDecoration(
+            color: bg.withOpacity(isLight ? 0.85 : 0.55),
+            border: Border(
+                bottom: BorderSide(color: border.withOpacity(0.5), width: 1)),
+          ),
           child: SafeArea(
             bottom: false,
             child: SizedBox(
@@ -198,22 +299,23 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
                   child: Container(
                     width: 36, height: 36,
                     decoration: BoxDecoration(
-                      color: _C.surface,
+                      color: surface,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: _C.border),
+                      border: Border.all(color: border),
+                      boxShadow: isLight ? [BoxShadow(
+                          color: Colors.black.withOpacity(0.06),
+                          blurRadius: 8, offset: const Offset(0, 2))] : [],
                     ),
-                    child: const Icon(Icons.arrow_back_ios_new_rounded,
-                        color: _C.textSub, size: 14),
+                    child: Icon(Icons.arrow_back_ios_new_rounded,
+                        color: textSub, size: 14),
                   ),
                 ),
-                const Expanded(
+                Expanded(
                   child: Center(
                     child: Text('My Profile',
-                        style: TextStyle(
-                            fontSize: 15,
+                        style: TextStyle(fontSize: 15,
                             fontWeight: FontWeight.w700,
-                            color: _C.textPrim,
-                            letterSpacing: 0.2)),
+                            color: textPrim, letterSpacing: 0.2)),
                   ),
                 ),
                 const SizedBox(width: 52),
@@ -229,27 +331,38 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
 // ─── Hero Card ────────────────────────────────────────────────────────────────
 class _HeroCard extends StatelessWidget {
   final String initials, fullName, email;
-  const _HeroCard({required this.initials, required this.fullName, required this.email});
+  final bool   isLight;
+  final Color  card, surface, border, gold, goldSoft, textPrim, textSub;
+
+  const _HeroCard({
+    required this.initials, required this.fullName, required this.email,
+    required this.isLight, required this.card, required this.surface,
+    required this.border, required this.gold, required this.goldSoft,
+    required this.textPrim, required this.textSub,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final avatarBg1 = isLight ? _Light.avatarBg1 : _Dark.avatarBg1;
+    final avatarBg2 = isLight ? _Light.avatarBg2 : _Dark.avatarBg2;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
       decoration: BoxDecoration(
-        color: _C.card,
+        color: card,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _C.border, width: 1),
+        border: Border.all(color: border, width: 1),
         boxShadow: [
           BoxShadow(
-              color: _C.gold.withOpacity(0.07),
-              blurRadius: 40,
-              offset: const Offset(0, 8)),
+              color: isLight
+                  ? Colors.black.withOpacity(0.07)
+                  : gold.withOpacity(0.07),
+              blurRadius: 40, offset: const Offset(0, 8)),
         ],
       ),
       child: Column(children: [
-
-        // ── Avatar with gold ring ───────────────────────────────────
+        // Avatar with gold ring
         Container(
           width: 88, height: 88,
           decoration: BoxDecoration(
@@ -260,28 +373,25 @@ class _HeroCard extends StatelessWidget {
               end: Alignment.bottomRight,
             ),
             boxShadow: [
-              BoxShadow(color: _C.gold.withOpacity(0.35),
+              BoxShadow(color: gold.withOpacity(0.35),
                   blurRadius: 32, spreadRadius: 2),
             ],
           ),
           child: Padding(
             padding: const EdgeInsets.all(2.5),
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  colors: [Color(0xFF0D1A33), Color(0xFF142444)],
+                  colors: [avatarBg1, avatarBg2],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
               ),
               child: Center(
                 child: Text(initials,
-                    style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        color: _C.goldSoft,
-                        letterSpacing: 2)),
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
+                        color: gold, letterSpacing: 2)),
               ),
             ),
           ),
@@ -290,34 +400,31 @@ class _HeroCard extends StatelessWidget {
         const SizedBox(height: 16),
 
         Text(fullName,
-            style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: _C.textPrim,
-                letterSpacing: -0.3)),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800,
+                color: textPrim, letterSpacing: -0.3)),
 
         const SizedBox(height: 6),
 
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
           decoration: BoxDecoration(
-            color: _C.surface,
+            color: surface,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _C.border),
+            border: Border.all(color: border),
           ),
           child: Text(email,
-              style: const TextStyle(fontSize: 11.5, color: _C.textSub)),
+              style: TextStyle(fontSize: 11.5, color: textSub)),
         ),
 
         const SizedBox(height: 20),
 
-        // ── Gold shimmer divider ────────────────────────────────────
+        // Gold shimmer divider
         Container(
           height: 1,
           decoration: BoxDecoration(
             gradient: LinearGradient(colors: [
               Colors.transparent,
-              _C.gold.withOpacity(0.40),
+              gold.withOpacity(0.40),
               Colors.transparent,
             ]),
           ),
@@ -327,14 +434,11 @@ class _HeroCard extends StatelessWidget {
 
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.verified_rounded,
-              color: _C.gold.withOpacity(0.85), size: 14),
+              color: gold.withOpacity(0.85), size: 14),
           const SizedBox(width: 6),
-          const Text('ESE MEMBER',
-              style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: _C.gold,
-                  letterSpacing: 2.5)),
+          Text('ESE MEMBER',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800,
+                  color: gold, letterSpacing: 2.5)),
         ]),
       ]),
     );
@@ -344,24 +448,33 @@ class _HeroCard extends StatelessWidget {
 // ─── Field model ──────────────────────────────────────────────────────────────
 class _Field {
   final IconData icon;
-  final String   label;
-  final String   value;
+  final String   label, value;
   const _Field(this.icon, this.label, this.value);
 }
 
 // ─── Details Card ─────────────────────────────────────────────────────────────
 class _DetailsCard extends StatelessWidget {
   final List<_Field> fields;
-  const _DetailsCard({required this.fields});
+  final bool  isLight;
+  final Color card, border, gold, textPrim, textSub;
+
+  const _DetailsCard({
+    required this.fields, required this.isLight,
+    required this.card, required this.border, required this.gold,
+    required this.textPrim, required this.textSub,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: _C.card,
+        color: card,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _C.border, width: 1),
+        border: Border.all(color: border, width: 1),
+        boxShadow: isLight ? [BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16, offset: const Offset(0, 4))] : [],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -377,40 +490,35 @@ class _DetailsCard extends StatelessWidget {
                   Container(
                     width: 36, height: 36,
                     decoration: BoxDecoration(
-                      color: _C.gold.withOpacity(0.07),
+                      color: gold.withOpacity(0.07),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: _C.gold.withOpacity(0.15), width: 1),
+                          color: gold.withOpacity(0.15), width: 1),
                     ),
                     child: Icon(f.icon,
-                        color: _C.gold.withOpacity(0.70), size: 16),
+                        color: gold.withOpacity(0.70), size: 16),
                   ),
                   const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(f.label,
-                            style: const TextStyle(
-                                fontSize: 9.5,
-                                fontWeight: FontWeight.w600,
-                                color: _C.textSub,
-                                letterSpacing: 0.8)),
-                        const SizedBox(height: 3),
-                        Text(f.value,
-                            style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: _C.textPrim)),
-                      ],
-                    ),
-                  ),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(f.label,
+                          style: TextStyle(fontSize: 9.5,
+                              fontWeight: FontWeight.w600,
+                              color: textSub, letterSpacing: 0.8)),
+                      const SizedBox(height: 3),
+                      Text(f.value,
+                          style: TextStyle(fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: textPrim)),
+                    ],
+                  )),
                 ]),
               ),
               if (!isLast)
                 Container(
                     height: 1,
-                    color: _C.border.withOpacity(0.6),
+                    color: border.withOpacity(0.6),
                     margin: const EdgeInsets.only(left: 68)),
             ]);
           }).toList(),
@@ -423,7 +531,8 @@ class _DetailsCard extends StatelessWidget {
 // ─── Sign Out Button ──────────────────────────────────────────────────────────
 class _SignOutBtn extends StatelessWidget {
   final VoidCallback onTap;
-  const _SignOutBtn({required this.onTap});
+  final Color red;
+  const _SignOutBtn({required this.onTap, required this.red});
 
   @override
   Widget build(BuildContext context) {
@@ -433,20 +542,16 @@ class _SignOutBtn extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 16),
         height: 50,
         decoration: BoxDecoration(
-          color: _C.red.withOpacity(0.07),
+          color: red.withOpacity(0.07),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _C.red.withOpacity(0.25), width: 1),
+          border: Border.all(color: red.withOpacity(0.25), width: 1),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.logout_rounded,
-              color: _C.red.withOpacity(0.85), size: 17),
+          Icon(Icons.logout_rounded, color: red.withOpacity(0.85), size: 17),
           const SizedBox(width: 8),
           Text('Sign Out',
-              style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w700,
-                  color: _C.red.withOpacity(0.85),
-                  letterSpacing: 0.3)),
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700,
+                  color: red.withOpacity(0.85), letterSpacing: 0.3)),
         ]),
       ),
     );
@@ -455,56 +560,63 @@ class _SignOutBtn extends StatelessWidget {
 
 // ─── Sign Out Dialog ──────────────────────────────────────────────────────────
 class _SignOutDialog extends StatelessWidget {
+  final bool  isLight;
+  final Color card, surface, border, red, textPrim, textSub;
+
+  const _SignOutDialog({
+    required this.isLight, required this.card, required this.surface,
+    required this.border, required this.red,
+    required this.textPrim, required this.textSub,
+  });
+
   @override
   Widget build(BuildContext context) {
+    final cancelBg = isLight ? const Color(0xFFF0F4FB) : surface;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
-          color: _C.surface,
+          color: card,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: _C.border, width: 1),
+          border: Border.all(color: border, width: 1),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.55),
-                blurRadius: 48, offset: const Offset(0, 20))
+            BoxShadow(
+                color: Colors.black.withOpacity(isLight ? 0.12 : 0.55),
+                blurRadius: 48, offset: const Offset(0, 20)),
           ],
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 52, height: 52,
             decoration: BoxDecoration(
-              color: _C.red.withOpacity(0.09),
-              shape: BoxShape.circle,
-              border: Border.all(color: _C.red.withOpacity(0.22), width: 1.5),
+              color: red.withOpacity(0.09), shape: BoxShape.circle,
+              border: Border.all(color: red.withOpacity(0.22), width: 1.5),
             ),
-            child: const Icon(Icons.logout_rounded, color: _C.red, size: 22),
+            child: Icon(Icons.logout_rounded, color: red, size: 22),
           ),
           const SizedBox(height: 16),
-          const Text('Sign Out?',
-              style: TextStyle(fontSize: 17,
-                  fontWeight: FontWeight.w800, color: _C.textPrim)),
+          Text('Sign Out?',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800,
+                  color: textPrim)),
           const SizedBox(height: 8),
           Text('You will be returned to the login screen.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 12, color: _C.textSub.withOpacity(0.75))),
+              style: TextStyle(fontSize: 12,
+                  color: textSub.withOpacity(0.75))),
           const SizedBox(height: 24),
           Row(children: [
             Expanded(child: GestureDetector(
               onTap: () => Navigator.pop(context, false),
               child: Container(
                 height: 44,
-                decoration: BoxDecoration(
-                    color: _C.card,
+                decoration: BoxDecoration(color: cancelBg,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _C.border)),
-                child: const Center(
-                  child: Text('Cancel',
-                      style: TextStyle(fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                          color: _C.textSub)),
-                ),
+                    border: Border.all(color: border)),
+                child: Center(child: Text('Cancel',
+                    style: TextStyle(fontSize: 13.5,
+                        fontWeight: FontWeight.w600, color: textSub))),
               ),
             )),
             const SizedBox(width: 12),
@@ -513,16 +625,13 @@ class _SignOutDialog extends StatelessWidget {
               child: Container(
                 height: 44,
                 decoration: BoxDecoration(
-                  color: _C.red.withOpacity(0.10),
+                  color: red.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: _C.red.withOpacity(0.32), width: 1),
+                  border: Border.all(color: red.withOpacity(0.32), width: 1),
                 ),
-                child: const Center(
-                  child: Text('Sign Out',
-                      style: TextStyle(fontSize: 13.5,
-                          fontWeight: FontWeight.w700, color: _C.red)),
-                ),
+                child: Center(child: Text('Sign Out',
+                    style: TextStyle(fontSize: 13.5,
+                        fontWeight: FontWeight.w700, color: red))),
               ),
             )),
           ]),

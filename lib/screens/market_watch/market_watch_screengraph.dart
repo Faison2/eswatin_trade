@@ -246,7 +246,7 @@ class _MarketWatchScreenState extends State<MarketWatchScreen>
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('session_token') ?? '';
       final response = await http.get(
-        Uri.parse('https://app.trading-ese.com/eseapi/Home/MarketWatch'),
+        Uri.parse('https://app.trading-ese.com:8443/eseapi/Home/MarketWatch'),
         headers: {
           'Content-Type':  'application/json',
           'Accept':        'application/json',

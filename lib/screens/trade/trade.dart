@@ -47,7 +47,7 @@ class _Light {
 }
 
 // ─── Base URL ─────────────────────────────────────────────────────────────────
-const _baseUrl = 'https://app.trading-ese.com/eseapi/Home';
+const _baseUrl = 'https://app.trading-ese.com:8443/eseapi/Home';
 
 // ─── Company Model ────────────────────────────────────────────────────────────
 class _Company {

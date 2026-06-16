@@ -131,7 +131,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     try {
       final response = await http
           .post(
-        Uri.parse('https://app.trading-ese.com/eseapi/Home/Login'),
+        Uri.parse('https://app.trading-ese.com:8443/eseapi/Home/Login'),
         headers: {
           'Content-Type': 'application/json',
           'Accept':       'application/json',

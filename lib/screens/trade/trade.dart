@@ -19,7 +19,6 @@ class _Dark {
   static const textSub   = Color(0xFF7A8BA8);
   static const textMuted = Color(0xFF3D5470);
   static const inputFill = Color(0xFF0D1728);
-  // Post button gradients
   static const buyGrad1  = Color(0xFF0D3320);
   static const buyGrad2  = Color(0xFF155229);
   static const sellGrad1 = Color(0xFF3D0808);
@@ -39,7 +38,6 @@ class _Light {
   static const textSub   = Color(0xFF64748B);
   static const textMuted = Color(0xFFADB5C7);
   static const inputFill = Color(0xFFF8FAFD);
-  // Post button gradients
   static const buyGrad1  = Color(0xFF0D6B3A);
   static const buyGrad2  = Color(0xFF148048);
   static const sellGrad1 = Color(0xFF8B1A1A);
@@ -95,7 +93,13 @@ enum _OrderType   { market, limit, stopLoss }
 // ─── Trade Screen ─────────────────────────────────────────────────────────────
 class TradeScreen extends StatefulWidget {
   final AppThemeNotifier themeNotifier;
-  const TradeScreen({super.key, required this.themeNotifier});
+  final String? preselectedCode;   // ← raw company code from MarketWatch
+
+  const TradeScreen({
+    super.key,
+    required this.themeNotifier,
+    this.preselectedCode,
+  });
 
   @override
   State<TradeScreen> createState() => _TradeScreenState();
@@ -133,19 +137,18 @@ class _TradeScreenState extends State<TradeScreen>
   String _clientName   = '';
 
   // ── Theme helpers ────────────────────────────────────────────────────────
-  bool   get _isLight  => widget.themeNotifier.isLight;
-  Color  get _bg       => _isLight ? _Light.bg        : _Dark.bg;
-  Color  get _surface  => _isLight ? _Light.surface   : _Dark.surface;
-  Color  get _card     => _isLight ? _Light.card      : _Dark.card;
-  Color  get _border   => _isLight ? _Light.border    : _Dark.border;
-  Color  get _teal     => _isLight ? _Light.teal      : _Dark.teal;
-  Color  get _red      => _isLight ? _Light.red       : _Dark.red;
-  Color  get _textPrim => _isLight ? _Light.textPrim  : _Dark.textPrim;
-  Color  get _textSub  => _isLight ? _Light.textSub   : _Dark.textSub;
-  Color  get _textMut  => _isLight ? _Light.textMuted : _Dark.textMuted;
-  Color  get _inputFill=> _isLight ? _Light.inputFill : _Dark.inputFill;
-
-  Color get _accent => _tradeType == _TradeType.buy ? _teal : _red;
+  bool   get _isLight   => widget.themeNotifier.isLight;
+  Color  get _bg        => _isLight ? _Light.bg        : _Dark.bg;
+  Color  get _surface   => _isLight ? _Light.surface   : _Dark.surface;
+  Color  get _card      => _isLight ? _Light.card      : _Dark.card;
+  Color  get _border    => _isLight ? _Light.border    : _Dark.border;
+  Color  get _teal      => _isLight ? _Light.teal      : _Dark.teal;
+  Color  get _red       => _isLight ? _Light.red       : _Dark.red;
+  Color  get _textPrim  => _isLight ? _Light.textPrim  : _Dark.textPrim;
+  Color  get _textSub   => _isLight ? _Light.textSub   : _Dark.textSub;
+  Color  get _textMut   => _isLight ? _Light.textMuted : _Dark.textMuted;
+  Color  get _inputFill => _isLight ? _Light.inputFill : _Dark.inputFill;
+  Color  get _accent    => _tradeType == _TradeType.buy ? _teal : _red;
 
   void _rebuild() => setState(() {});
 
@@ -176,7 +179,26 @@ class _TradeScreenState extends State<TradeScreen>
     _sessionToken = prefs.getString('session_token') ?? '';
     _cdsNumber    = prefs.getString('cds_number')    ?? '';
     _clientName   = prefs.getString('full_name')     ?? '';
+
+    // Load companies and brokers in parallel
     await Future.wait([_fetchMarketWatch(), _fetchBrokers()]);
+
+    // ── Auto-select company if preselectedCode was passed ──────────────────
+    final code = widget.preselectedCode;
+    if (code != null && code.isNotEmpty && _companies.isNotEmpty) {
+      final match = _companies.where(
+            (c) => c.code.trim().toUpperCase() == code.trim().toUpperCase(),
+      ).firstOrNull;
+
+      if (match != null && mounted) {
+        setState(() {
+          _selected = match;
+          if (_orderType == _OrderType.market) {
+            _priceCtrl.text = match.currentPrice.toStringAsFixed(2);
+          }
+        });
+      }
+    }
   }
 
   Future<void> _fetchMarketWatch() async {
@@ -184,8 +206,10 @@ class _TradeScreenState extends State<TradeScreen>
     try {
       final res = await http.get(
         Uri.parse('$_baseUrl/MarketWatch'),
-        headers: {'Authorization': 'Bearer $_sessionToken',
-          'Content-Type': 'application/json'},
+        headers: {
+          'Authorization': 'Bearer $_sessionToken',
+          'Content-Type': 'application/json',
+        },
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -200,7 +224,10 @@ class _TradeScreenState extends State<TradeScreen>
         });
       }
     } catch (e) {
-      setState(() { _companiesError = 'Network error: $e'; _loadingCompanies = false; });
+      setState(() {
+        _companiesError = 'Network error: $e';
+        _loadingCompanies = false;
+      });
     }
   }
 
@@ -209,14 +236,25 @@ class _TradeScreenState extends State<TradeScreen>
     try {
       final res = await http.get(
         Uri.parse('$_baseUrl/Brokers'),
-        headers: {'Authorization': 'Bearer $_sessionToken',
-          'Content-Type': 'application/json'},
+        headers: {
+          'Authorization': 'Bearer $_sessionToken',
+          'Content-Type': 'application/json',
+        },
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
-        final list = (data['brokers'] as List<dynamic>)
+
+        // ── Null-safe: try multiple possible keys ──────────────────────────
+        final raw = data['brokers']
+            ?? data['Brokers']
+            ?? data['data']
+            ?? data['result']
+            ?? [];
+
+        final list = (raw as List<dynamic>)
             .map((e) => _Broker.fromJson(e as Map<String, dynamic>))
             .toList();
+
         setState(() { _brokers = list; _loadingBrokers = false; });
       } else {
         setState(() {
@@ -225,14 +263,17 @@ class _TradeScreenState extends State<TradeScreen>
         });
       }
     } catch (e) {
-      setState(() { _brokersError = 'Network error: $e'; _loadingBrokers = false; });
+      setState(() {
+        _brokersError = 'Network error: $e';
+        _loadingBrokers = false;
+      });
     }
   }
 
   double get _unitPrice => _orderType == _OrderType.market
       ? (_selected?.currentPrice ?? 0.0)
       : (double.tryParse(_priceCtrl.text) ?? (_selected?.currentPrice ?? 0.0));
-  int    get _qty        => int.tryParse(_qtyCtrl.text) ?? 0;
+  int    get _qty       => int.tryParse(_qtyCtrl.text) ?? 0;
   double get _estimated  => _unitPrice * _qty;
   double get _commission => _estimated * 0.0025;
   double get _grandTotal => _estimated + _commission;
@@ -300,8 +341,10 @@ class _TradeScreenState extends State<TradeScreen>
     try {
       final res = await http.post(
         Uri.parse('$_baseUrl/PlaceOrder'),
-        headers: {'Authorization': 'Bearer $_sessionToken',
-          'Content-Type': 'application/json'},
+        headers: {
+          'Authorization': 'Bearer $_sessionToken',
+          'Content-Type': 'application/json',
+        },
         body: jsonEncode(body),
       );
       final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -310,8 +353,7 @@ class _TradeScreenState extends State<TradeScreen>
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           backgroundColor: _accent,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           content: Row(children: [
             const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
             const SizedBox(width: 10),
@@ -436,8 +478,7 @@ class _TradeScreenState extends State<TradeScreen>
                             _tifOpen = false;
                             _brokerOpen = false;
                           }),
-                          onSearch: (q) =>
-                              setState(() => _searchQuery = q),
+                          onSearch: (q) => setState(() => _searchQuery = q),
                           onSelect: (c) => setState(() {
                             _selected    = c;
                             _companyOpen = false;
@@ -463,14 +504,14 @@ class _TradeScreenState extends State<TradeScreen>
                             onRetry: _fetchBrokers,
                             red: _red, teal: _teal)
                             : _BrokerDropdown(
-                          selected:     _selectedBroker,
-                          brokers:      _brokers,
-                          open:         _brokerOpen,
-                          accent:       _accent,
-                          border:       _border,
-                          textPrim:     _textPrim,
-                          textMuted:    _textMut,
-                          textSub:      _textSub,
+                          selected:  _selectedBroker,
+                          brokers:   _brokers,
+                          open:      _brokerOpen,
+                          accent:    _accent,
+                          border:    _border,
+                          textPrim:  _textPrim,
+                          textMuted: _textMut,
+                          textSub:   _textSub,
                           onToggle: () => setState(() {
                             _brokerOpen  = !_brokerOpen;
                             _companyOpen = false;
@@ -526,7 +567,8 @@ class _TradeScreenState extends State<TradeScreen>
                               child: GestureDetector(
                                 onTap: () => setState(() {
                                   _orderType = t.$1;
-                                  if (t.$1 == _OrderType.market && _selected != null) {
+                                  if (t.$1 == _OrderType.market &&
+                                      _selected != null) {
                                     _priceCtrl.text =
                                         _selected!.currentPrice.toStringAsFixed(2);
                                   } else if (t.$1 != _OrderType.market) {
@@ -567,7 +609,9 @@ class _TradeScreenState extends State<TradeScreen>
                                               fontWeight: active
                                                   ? FontWeight.w700
                                                   : FontWeight.w400,
-                                              color: active ? _accent : _textSub)),
+                                              color: active
+                                                  ? _accent
+                                                  : _textSub)),
                                     ],
                                   ),
                                 ),
@@ -586,7 +630,8 @@ class _TradeScreenState extends State<TradeScreen>
                         child: Row(children: [
                           Expanded(
                             child: GestureDetector(
-                              onTap: () => setState(() => _tradeType = _TradeType.buy),
+                              onTap: () =>
+                                  setState(() => _tradeType = _TradeType.buy),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
                                 margin: const EdgeInsets.only(right: 8),
@@ -625,7 +670,8 @@ class _TradeScreenState extends State<TradeScreen>
                           ),
                           Expanded(
                             child: GestureDetector(
-                              onTap: () => setState(() => _tradeType = _TradeType.sell),
+                              onTap: () =>
+                                  setState(() => _tradeType = _TradeType.sell),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
                                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -894,7 +940,7 @@ class _CompanyDropdown extends StatelessWidget {
               Padding(padding: const EdgeInsets.only(left: 10),
                   child: Icon(Icons.search_rounded, color: textMuted, size: 16)),
               Expanded(child: TextField(
-                autofocus: true,
+                // autofocus removed — prevents keyboard gap
                 onChanged: onSearch,
                 style: TextStyle(fontSize: 13, color: textPrim),
                 decoration: InputDecoration(
@@ -906,7 +952,7 @@ class _CompanyDropdown extends StatelessWidget {
               )),
             ]),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),  // tightened from 8
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 260),
             child: ListView.builder(
@@ -928,7 +974,9 @@ class _CompanyDropdown extends StatelessWidget {
                       color: sel ? accent.withOpacity(0.10) : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: sel ? accent.withOpacity(0.28) : Colors.transparent),
+                          color: sel
+                              ? accent.withOpacity(0.28)
+                              : Colors.transparent),
                     ),
                     child: Row(children: [
                       Container(
@@ -955,7 +1003,8 @@ class _CompanyDropdown extends StatelessWidget {
                           children: [
                             Text('E ${c.currentPrice.toStringAsFixed(2)}',
                                 style: TextStyle(fontSize: 12.5,
-                                    fontWeight: FontWeight.w700, color: textPrim)),
+                                    fontWeight: FontWeight.w700,
+                                    color: textPrim)),
                             Text(
                               '${c.positive ? '+' : ''}${c.changePercent.toStringAsFixed(2)}%',
                               style: TextStyle(fontSize: 9.5,
@@ -1028,10 +1077,14 @@ class _BrokerDropdown extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: active ? accent.withOpacity(0.10) : Colors.transparent,
+                  color: active
+                      ? accent.withOpacity(0.10)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: active ? accent.withOpacity(0.28) : Colors.transparent),
+                      color: active
+                          ? accent.withOpacity(0.28)
+                          : Colors.transparent),
                 ),
                 child: Row(children: [
                   Expanded(child: Column(
@@ -1097,7 +1150,7 @@ class _TifDropdown extends StatelessWidget {
             Container(height: 1, color: border),
             const SizedBox(height: 8),
             ...[
-              (_TimeInForce.day, 'Day',               'Order expires at end of trading day'),
+              (_TimeInForce.day, 'Day',                'Order expires at end of trading day'),
               (_TimeInForce.gtc, 'Good Till Cancelled','Order stays open until cancelled'),
               (_TimeInForce.ioc, 'Immediate or Cancel','Fill immediately or cancel'),
               (_TimeInForce.fok, 'Fill or Kill',       'Fill entire order or cancel'),
@@ -1112,10 +1165,14 @@ class _TifDropdown extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: active ? accent.withOpacity(0.10) : Colors.transparent,
+                    color: active
+                        ? accent.withOpacity(0.10)
+                        : Colors.transparent,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                        color: active ? accent.withOpacity(0.28) : Colors.transparent),
+                        color: active
+                            ? accent.withOpacity(0.28)
+                            : Colors.transparent),
                   ),
                   child: Row(children: [
                     Expanded(child: Column(
@@ -1307,7 +1364,8 @@ class _SummaryCard extends StatelessWidget {
         color: card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: accent.withOpacity(0.22), width: 1),
-        boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.06),
+        boxShadow: isLight ? [BoxShadow(
+            color: Colors.black.withOpacity(0.06),
             blurRadius: 10, offset: const Offset(0, 3))] : [],
       ),
       child: Column(children: [
@@ -1437,7 +1495,9 @@ class _PostButton extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             Text(
-              tradeType == _TradeType.buy ? 'POST BUY ORDER' : 'POST SELL ORDER',
+              tradeType == _TradeType.buy
+                  ? 'POST BUY ORDER'
+                  : 'POST SELL ORDER',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900,
                   color: enabled ? Colors.white : textMuted,
                   letterSpacing: 1.5),

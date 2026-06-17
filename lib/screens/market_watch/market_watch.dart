@@ -275,7 +275,7 @@ class _MarketWatchState extends State<MarketWatch>
                       color: _teal, borderRadius: BorderRadius.circular(2)),
                 ),
                 const SizedBox(width: 8),
-                Text('Market Watch — ESE Live',
+                Text('Market Watch',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800,
                         color: _textPrim, letterSpacing: 0.2)),
               ]),

@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../settings /settings.dart';
+import '../trade/trade.dart';
+
 
 // ─── Dark tokens ──────────────────────────────────────────────────────────────
 class _Dark {
@@ -20,7 +22,6 @@ class _Dark {
   static const textPrim  = Color(0xFFEEF2FF);
   static const textSub   = Color(0xFF7A8BA8);
   static const textMuted = Color(0xFF3D5470);
-  // Chart painter
   static const chartBg   = Color(0xFF0B1628);
   static const chartGrid = Color(0xFF1E2E45);
 }
@@ -38,7 +39,6 @@ class _Light {
   static const textPrim  = Color(0xFF0D1728);
   static const textSub   = Color(0xFF64748B);
   static const textMuted = Color(0xFFADB5C7);
-  // Chart painter
   static const chartBg   = Color(0xFFF0F6FF);
   static const chartGrid = Color(0xFFDDE3EF);
 }
@@ -56,13 +56,17 @@ class _Stock {
   final bool   positive;
   final List<double>  series;
   final List<_Candle> candles;
+  // raw company code from API – used to match in TradeScreen
+  final String companyCode;
 
   const _Stock({
-    required this.ticker, required this.name, required this.sector,
-    required this.price,  required this.open,  required this.high,
-    required this.low,    required this.change, required this.changePercent,
-    required this.volume, required this.positive,
-    required this.series, required this.candles,
+    required this.ticker,        required this.name,
+    required this.sector,        required this.price,
+    required this.open,          required this.high,
+    required this.low,           required this.change,
+    required this.changePercent, required this.volume,
+    required this.positive,      required this.series,
+    required this.candles,       required this.companyCode,
   });
 
   factory _Stock.fromJson(Map<String, dynamic> j) {
@@ -85,6 +89,7 @@ class _Stock {
     }
 
     return _Stock(
+      companyCode:   companyCode,
       ticker:        _deriveTicker(companyCode, fullname),
       name:          fullname,
       sector:        _deriveSector(fullname),
@@ -133,9 +138,9 @@ class _Stock {
   }) {
     final prices = [open, close, high, low, last].where((p) => p > 0).toList();
     if (prices.isEmpty) return List.filled(20, 0.5);
-    final minP    = prices.reduce(math.min);
-    final maxP    = prices.reduce(math.max);
-    final range   = (maxP - minP).abs();
+    final minP  = prices.reduce(math.min);
+    final maxP  = prices.reduce(math.max);
+    final range = (maxP - minP).abs();
     double norm(double v) => range == 0 ? 0.5 : ((v - minP) / range).clamp(0.0, 1.0);
     final rng     = math.Random((open * 100).toInt() ^ (last * 100).toInt());
     final goingUp = trend == 'UP' || last >= open;
@@ -207,19 +212,19 @@ class _MarketWatchScreenState extends State<MarketWatchScreen>
   List<String> _sectors      = ['All'];
 
   // ── Theme helpers ────────────────────────────────────────────────────────
-  bool   get _isLight  => widget.themeNotifier.isLight;
-  Color  get _bg       => _isLight ? _Light.bg       : _Dark.bg;
-  Color  get _surface  => _isLight ? _Light.surface  : _Dark.surface;
-  Color  get _card     => _isLight ? _Light.card     : _Dark.card;
-  Color  get _border   => _isLight ? _Light.border   : _Dark.border;
-  Color  get _gold     => _isLight ? _Light.gold     : _Dark.gold;
-  Color  get _teal     => _isLight ? _Light.teal     : _Dark.teal;
-  Color  get _red      => _isLight ? _Light.red      : _Dark.red;
-  Color  get _textPrim => _isLight ? _Light.textPrim : _Dark.textPrim;
-  Color  get _textSub  => _isLight ? _Light.textSub  : _Dark.textSub;
-  Color  get _textMut  => _isLight ? _Light.textMuted: _Dark.textMuted;
-  Color  get _chartBg  => _isLight ? _Light.chartBg  : _Dark.chartBg;
-  Color  get _chartGrid=> _isLight ? _Light.chartGrid : _Dark.chartGrid;
+  bool   get _isLight   => widget.themeNotifier.isLight;
+  Color  get _bg        => _isLight ? _Light.bg        : _Dark.bg;
+  Color  get _surface   => _isLight ? _Light.surface   : _Dark.surface;
+  Color  get _card      => _isLight ? _Light.card      : _Dark.card;
+  Color  get _border    => _isLight ? _Light.border    : _Dark.border;
+  Color  get _gold      => _isLight ? _Light.gold      : _Dark.gold;
+  Color  get _teal      => _isLight ? _Light.teal      : _Dark.teal;
+  Color  get _red       => _isLight ? _Light.red       : _Dark.red;
+  Color  get _textPrim  => _isLight ? _Light.textPrim  : _Dark.textPrim;
+  Color  get _textSub   => _isLight ? _Light.textSub   : _Dark.textSub;
+  Color  get _textMut   => _isLight ? _Light.textMuted : _Dark.textMuted;
+  Color  get _chartBg   => _isLight ? _Light.chartBg   : _Dark.chartBg;
+  Color  get _chartGrid => _isLight ? _Light.chartGrid : _Dark.chartGrid;
 
   void _rebuild() => setState(() {});
 
@@ -287,6 +292,19 @@ class _MarketWatchScreenState extends State<MarketWatchScreen>
     } catch (_) {
       if (mounted) setState(() { _error = 'Unable to reach ESE servers.'; _loading = false; });
     }
+  }
+
+  // ── Navigate to TradeScreen with preselected company ─────────────────────
+  void _openTrade(_Stock stock) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TradeScreen(
+          themeNotifier:   widget.themeNotifier,
+          preselectedCode: stock.companyCode,
+        ),
+      ),
+    );
   }
 
   List<_Stock> get _filtered => _sectorFilter == 'All'
@@ -367,6 +385,7 @@ class _MarketWatchScreenState extends State<MarketWatchScreen>
                         chartMode:   _chartModes[s.ticker] ?? 0,
                         onChartMode: (m) =>
                             setState(() => _chartModes[s.ticker] = m),
+                        onTrade:     _openTrade,   // ← wired up
                         isLight:     _isLight,
                         card:        _card,
                         surface:     _surface,
@@ -649,17 +668,21 @@ class _SumDiv extends StatelessWidget {
 class _StockCard extends StatelessWidget {
   final _Stock stock;
   final int    chartMode;
-  final ValueChanged<int> onChartMode;
+  final ValueChanged<int>    onChartMode;
+  final ValueChanged<_Stock> onTrade;       // ← new
   final bool   isLight;
   final Color  card, surface, border, gold, teal, red;
   final Color  textPrim, textSub, textMuted, chartBg, chartGrid;
 
   const _StockCard({
-    required this.stock, required this.chartMode, required this.onChartMode,
-    required this.isLight, required this.card, required this.surface,
-    required this.border, required this.gold, required this.teal,
-    required this.red, required this.textPrim, required this.textSub,
-    required this.textMuted, required this.chartBg, required this.chartGrid,
+    required this.stock,      required this.chartMode,
+    required this.onChartMode, required this.onTrade,  // ← new
+    required this.isLight,    required this.card,
+    required this.surface,    required this.border,
+    required this.gold,       required this.teal,
+    required this.red,        required this.textPrim,
+    required this.textSub,    required this.textMuted,
+    required this.chartBg,    required this.chartGrid,
   });
 
   @override
@@ -854,8 +877,10 @@ class _StockCard extends StatelessWidget {
                     textSub),
               ]),
               const SizedBox(height: 8),
+
+              // ── Trade button — now navigates ─────────────────────
               GestureDetector(
-                onTap: () {},
+                onTap: () => onTrade(stock),   // ← was () {}
                 child: Container(
                   height: 44,
                   decoration: BoxDecoration(

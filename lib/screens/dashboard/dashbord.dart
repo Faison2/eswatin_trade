@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../main.dart';
 import '../market_watch/market_watch.dart';
 import '../market_watch/market_watch_screengraph.dart';
+import '../portfolio/portfolio.dart';
 import '../profile/profile.dart';
 import '../trade/trade.dart';
 import 'drawer.dart';
@@ -164,6 +165,18 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   void _onNavTap(int i) {
+    if (i == 0) {
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, animation, __) => PortfolioScreen(themeNotifier: appThemeNotifier),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 280),
+        ),
+      );
+      return;
+    }
     if (i == 4) {
       Navigator.push(
         context,

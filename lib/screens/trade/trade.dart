@@ -93,7 +93,7 @@ enum _OrderType   { market, limit, stopLoss }
 // ─── Trade Screen ─────────────────────────────────────────────────────────────
 class TradeScreen extends StatefulWidget {
   final AppThemeNotifier themeNotifier;
-  final String? preselectedCode;   // ← raw company code from MarketWatch
+  final String? preselectedCode;
 
   const TradeScreen({
     super.key,
@@ -120,10 +120,9 @@ class _TradeScreenState extends State<TradeScreen>
   final _qtyCtrl   = TextEditingController();
   final _priceCtrl = TextEditingController();
 
-  bool   _companyOpen = false;
-  bool   _tifOpen     = false;
-  bool   _brokerOpen  = false;
-  String _searchQuery = '';
+  bool _companyOpen = false;
+  bool _tifOpen     = false;
+  bool _brokerOpen  = false;
 
   List<_Company> _companies = [];
   List<_Broker>  _brokers   = [];
@@ -180,10 +179,8 @@ class _TradeScreenState extends State<TradeScreen>
     _cdsNumber    = prefs.getString('cds_number')    ?? '';
     _clientName   = prefs.getString('full_name')     ?? '';
 
-    // Load companies and brokers in parallel
     await Future.wait([_fetchMarketWatch(), _fetchBrokers()]);
 
-    // ── Auto-select company if preselectedCode was passed ──────────────────
     final code = widget.preselectedCode;
     if (code != null && code.isNotEmpty && _companies.isNotEmpty) {
       final match = _companies.where(
@@ -244,7 +241,6 @@ class _TradeScreenState extends State<TradeScreen>
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
 
-        // ── Null-safe: try multiple possible keys ──────────────────────────
         final raw = data['brokers']
             ?? data['Brokers']
             ?? data['data']
@@ -277,12 +273,6 @@ class _TradeScreenState extends State<TradeScreen>
   double get _estimated  => _unitPrice * _qty;
   double get _commission => _estimated * 0.0025;
   double get _grandTotal => _estimated + _commission;
-
-  List<_Company> get _filtered => _searchQuery.isEmpty
-      ? _companies
-      : _companies.where((c) =>
-  c.fullName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-      c.code.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
 
   String get _tifLabel {
     switch (_tif) {
@@ -449,7 +439,7 @@ class _TradeScreenState extends State<TradeScreen>
                         ]),
                       ),
 
-                      // ── 1. Company ──────────────────────────────
+                      // ── 1. Company trigger card ─────────────────
                       _FieldCard(
                         label: 'Company', labelColor: _accent,
                         card: _card, border: _border, isLight: _isLight,
@@ -459,37 +449,42 @@ class _TradeScreenState extends State<TradeScreen>
                             ? _ErrorRow(message: _companiesError!,
                             onRetry: _fetchMarketWatch,
                             red: _red, teal: _teal)
-                            : _CompanyDropdown(
-                          selected:    _selected,
-                          filtered:    _filtered,
-                          open:        _companyOpen,
-                          searchQuery: _searchQuery,
-                          accent:      _accent,
-                          surface:     _surface,
-                          border:      _border,
-                          textPrim:    _textPrim,
-                          textMuted:   _textMut,
-                          textSub:     _textSub,
-                          teal:        _teal,
-                          red:         _red,
-                          isLight:     _isLight,
+                            : _CompanyTrigger(
+                          selected:  _selected,
+                          open:      _companyOpen,
+                          accent:    _accent,
+                          textPrim:  _textPrim,
+                          textMuted: _textMut,
                           onToggle: () => setState(() {
                             _companyOpen = !_companyOpen;
-                            _tifOpen = false;
-                            _brokerOpen = false;
+                            _tifOpen     = false;
+                            _brokerOpen  = false;
                           }),
-                          onSearch: (q) => setState(() => _searchQuery = q),
+                        ),
+                      ),
+
+                      // ── 1b. Company list card (separate, below) ──
+                      if (_companyOpen && _companies.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        _CompanyListCard(
+                          companies: _companies,
+                          selected:  _selected,
+                          accent:    _accent,
+                          card:      _card,
+                          border:    _border,
+                          textPrim:  _textPrim,
+                          textSub:   _textSub,
+                          isLight:   _isLight,
                           onSelect: (c) => setState(() {
                             _selected    = c;
                             _companyOpen = false;
-                            _searchQuery = '';
                             if (_orderType == _OrderType.market) {
                               _priceCtrl.text =
                                   c.currentPrice.toStringAsFixed(2);
                             }
                           }),
                         ),
-                      ),
+                      ],
 
                       const SizedBox(height: 10),
 
@@ -877,150 +872,148 @@ class _TradeScreenState extends State<TradeScreen>
   }
 }
 
-// ─── Company Dropdown ─────────────────────────────────────────────────────────
-class _CompanyDropdown extends StatelessWidget {
-  final _Company? selected;
-  final List<_Company> filtered;
-  final bool    open;
-  final String  searchQuery;
-  final Color   accent, surface, border, textPrim, textMuted, textSub, teal, red;
-  final bool    isLight;
+// ─── Company Trigger (just the selector row) ─────────────────────────────────
+class _CompanyTrigger extends StatelessWidget {
+  final _Company?    selected;
+  final bool         open;
+  final Color        accent, textPrim, textMuted;
   final VoidCallback onToggle;
-  final ValueChanged<String> onSearch;
-  final ValueChanged<_Company> onSelect;
 
-  const _CompanyDropdown({
-    required this.selected,   required this.filtered,
-    required this.open,       required this.searchQuery,
-    required this.accent,     required this.surface,
-    required this.border,     required this.textPrim,
-    required this.textMuted,  required this.textSub,
-    required this.teal,       required this.red,
-    required this.isLight,    required this.onToggle,
-    required this.onSearch,   required this.onSelect,
+  const _CompanyTrigger({
+    required this.selected,
+    required this.open,
+    required this.accent,
+    required this.textPrim,
+    required this.textMuted,
+    required this.onToggle,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      GestureDetector(
-        onTap: onToggle,
-        child: Row(children: [
-          Expanded(child: Text(
-            selected?.fullName ?? 'Please Select',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
-                color: selected == null ? textMuted : textPrim),
-          )),
-          AnimatedRotation(
-            turns: open ? 0.5 : 0,
-            duration: const Duration(milliseconds: 200),
-            child: Icon(Icons.keyboard_arrow_down_rounded, color: accent, size: 22),
+    return GestureDetector(
+      onTap: onToggle,
+      behavior: HitTestBehavior.opaque,
+      child: Row(children: [
+        Expanded(
+          child: selected == null
+              ? Text('Please Select',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
+                  color: textMuted))
+              : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(selected!.fullName,
+                  style: TextStyle(fontSize: 15,
+                      fontWeight: FontWeight.w600, color: textPrim),
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 2),
+              Text('E ${selected!.currentPrice.toStringAsFixed(2)}',
+                  style: TextStyle(fontSize: 12,
+                      fontWeight: FontWeight.w500, color: accent)),
+            ],
           ),
-        ]),
+        ),
+        AnimatedRotation(
+          turns: open ? 0.5 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: Icon(Icons.keyboard_arrow_down_rounded, color: accent, size: 22),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─── Company List Card (separate card below trigger) ─────────────────────────
+class _CompanyListCard extends StatelessWidget {
+  final List<_Company>         companies;
+  final _Company?              selected;
+  final Color                  accent, card, border, textPrim, textSub;
+  final bool                   isLight;
+  final ValueChanged<_Company> onSelect;
+
+  const _CompanyListCard({
+    required this.companies,
+    required this.selected,
+    required this.accent,
+    required this.card,
+    required this.border,
+    required this.textPrim,
+    required this.textSub,
+    required this.isLight,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: border, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isLight ? 0.08 : 0.22),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      AnimatedSize(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        child: open ? Column(children: [
-          const SizedBox(height: 12),
-          Container(height: 1, color: border),
-          const SizedBox(height: 10),
-          // Search
-          Container(
-            height: 40,
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: border),
-              boxShadow: isLight ? [BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 6, offset: const Offset(0, 2))] : [],
-            ),
-            child: Row(children: [
-              Padding(padding: const EdgeInsets.only(left: 10),
-                  child: Icon(Icons.search_rounded, color: textMuted, size: 16)),
-              Expanded(child: TextField(
-                // autofocus removed — prevents keyboard gap
-                onChanged: onSearch,
-                style: TextStyle(fontSize: 13, color: textPrim),
-                decoration: InputDecoration(
-                  hintText: 'Search…',
-                  hintStyle: TextStyle(fontSize: 13, color: textMuted),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                ),
-              )),
-            ]),
-          ),
-          const SizedBox(height: 4),  // tightened from 8
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 260),
-            child: ListView.builder(
-              shrinkWrap: true,
-              physics: const BouncingScrollPhysics(),
-              itemCount: filtered.length,
-              itemBuilder: (_, i) {
-                final c   = filtered[i];
-                final sel = c.code == (selected?.code ?? '');
-                return GestureDetector(
-                  onTap: () => onSelect(c),
-                  behavior: HitTestBehavior.opaque,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    margin: const EdgeInsets.only(bottom: 4),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: sel ? accent.withOpacity(0.10) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: sel
-                              ? accent.withOpacity(0.28)
-                              : Colors.transparent),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 320),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: companies.length,
+            separatorBuilder: (_, __) =>
+                Divider(height: 1, thickness: 1, color: border, indent: 16, endIndent: 16),
+            itemBuilder: (_, i) {
+              final c   = companies[i];
+              final sel = c.code == (selected?.code ?? '');
+              return GestureDetector(
+                onTap: () => onSelect(c),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 13),
+                  color: sel
+                      ? accent.withOpacity(0.08)
+                      : Colors.transparent,
+                  child: Row(children: [
+                    // Company name
+                    Expanded(
+                      child: Text(c.fullName,
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                              color: sel ? accent : textPrim),
+                          overflow: TextOverflow.ellipsis),
                     ),
-                    child: Row(children: [
-                      Container(
-                        width: 52,
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        decoration: BoxDecoration(
-                          color: surface,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: border),
-                        ),
-                        child: Text(c.code,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 8,
-                                fontWeight: FontWeight.w800,
-                                color: sel ? accent : textSub,
-                                letterSpacing: 0.4)),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(child: Text(c.fullName,
-                          style: TextStyle(fontSize: 12.5,
-                              fontWeight: FontWeight.w600, color: textPrim),
-                          overflow: TextOverflow.ellipsis)),
-                      Column(crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('E ${c.currentPrice.toStringAsFixed(2)}',
-                                style: TextStyle(fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: textPrim)),
-                            Text(
-                              '${c.positive ? '+' : ''}${c.changePercent.toStringAsFixed(2)}%',
-                              style: TextStyle(fontSize: 9.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: c.positive ? teal : red),
-                            ),
-                          ]),
-                    ]),
-                  ),
-                );
-              },
-            ),
+                    const SizedBox(width: 12),
+                    // Price
+                    Text('E ${c.currentPrice.toStringAsFixed(2)}',
+                        style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: sel ? accent : textSub)),
+                    if (sel) ...[
+                      const SizedBox(width: 8),
+                      Icon(Icons.check_circle_rounded,
+                          color: accent, size: 16),
+                    ],
+                  ]),
+                ),
+              );
+            },
           ),
-        ]) : const SizedBox.shrink(),
+        ),
       ),
-    ]);
+    );
   }
 }
 

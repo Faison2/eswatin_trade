@@ -544,7 +544,7 @@ class _PortfolioHeroCard extends StatelessWidget {
                         ? [_Light.textPrim, const Color(0xFF1E3A6B)]
                         : [_Dark.textPrim, const Color(0xFFCCD6F0)])
                     .createShader(b),
-                child: const Text('E 4,230.00',
+                child: const Text('E 00.00',
                     style: TextStyle(fontSize: 36, fontWeight: FontWeight.w900,
                         color: Colors.white, letterSpacing: -1, height: 1)),
               ),
@@ -552,7 +552,7 @@ class _PortfolioHeroCard extends StatelessWidget {
               Row(children: [
                 Icon(Icons.trending_up_rounded, color: teal, size: 13),
                 const SizedBox(width: 4),
-                Text('+E 820 this month',
+                Text('+E 0 this month',
                     style: TextStyle(fontSize: 11,
                         color: teal.withOpacity(0.85),
                         fontWeight: FontWeight.w500)),
@@ -562,17 +562,17 @@ class _PortfolioHeroCard extends StatelessWidget {
               const SizedBox(height: 14),
               Row(children: [
                 _SubStat(label: 'Day P&L',
-                    value: '+E 148', positive: true, teal: teal,
+                    value: '+E 0.00', positive: true, teal: teal,
                     red: isLight ? _Light.red : _Dark.red,
                     textPrim: textPrim, textSub: textSub),
                 _SubStatDivider(border: border),
                 _SubStat(label: 'Cash Balance',
-                    value: 'E 12,480', positive: null, teal: teal,
+                    value: 'E 0.00', positive: null, teal: teal,
                     red: isLight ? _Light.red : _Dark.red,
                     textPrim: textPrim, textSub: textSub),
                 _SubStatDivider(border: border),
                 _SubStat(label: 'Returns',
-                    value: '+14.6%', positive: true, teal: teal,
+                    value: '+0%', positive: true, teal: teal,
                     red: isLight ? _Light.red : _Dark.red,
                     textPrim: textPrim, textSub: textSub),
               ]),
